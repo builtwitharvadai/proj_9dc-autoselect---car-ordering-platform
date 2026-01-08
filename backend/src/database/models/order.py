@@ -19,8 +19,9 @@ from sqlalchemy import (
     Index,
     CheckConstraint,
     Enum as SQLEnum,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database.base import AuditedModel
@@ -101,6 +102,48 @@ class OrderStatus(str, Enum):
         )
 
 
+class PaymentStatus(str, Enum):
+    """
+    Payment status enumeration for tracking payment lifecycle.
+
+    Attributes:
+        PENDING: Payment initiated but not completed
+        AUTHORIZED: Payment authorized but not captured
+        CAPTURED: Payment captured successfully
+        FAILED: Payment failed
+        REFUNDED: Payment refunded
+        PARTIALLY_REFUNDED: Payment partially refunded
+    """
+
+    PENDING = "pending"
+    AUTHORIZED = "authorized"
+    CAPTURED = "captured"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+    PARTIALLY_REFUNDED = "partially_refunded"
+
+
+class FulfillmentStatus(str, Enum):
+    """
+    Fulfillment status enumeration for tracking order fulfillment.
+
+    Attributes:
+        PENDING: Fulfillment not started
+        PROCESSING: Order being prepared
+        READY: Order ready for pickup/delivery
+        SHIPPED: Order shipped
+        DELIVERED: Order delivered
+        CANCELLED: Fulfillment cancelled
+    """
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+
 class Order(AuditedModel):
     """
     Order model for managing customer orders and fulfillment.
@@ -114,14 +157,24 @@ class Order(AuditedModel):
         user_id: Foreign key to user who placed order
         vehicle_id: Foreign key to ordered vehicle
         configuration_id: Foreign key to vehicle configuration
+        dealer_id: Foreign key to dealer handling order
+        manufacturer_id: Foreign key to manufacturer
         status: Current order status (enum)
+        payment_status: Current payment status (enum)
+        fulfillment_status: Current fulfillment status (enum)
         total_amount: Total order amount including all charges
         subtotal: Subtotal before taxes and fees
         tax_amount: Tax amount
+        total_tax: Total tax amount (alias for tax_amount)
         shipping_amount: Shipping/delivery charges
         discount_amount: Applied discount amount
+        total_fees: Total fees amount
         order_number: Human-readable order number
         notes: Additional order notes
+        special_instructions: Special delivery or handling instructions
+        customer_info: Customer information stored as JSONB
+        delivery_address: Delivery address stored as JSONB
+        trade_in_info: Trade-in vehicle information stored as JSONB
         estimated_delivery_date: Estimated delivery date
         actual_delivery_date: Actual delivery date
         created_at: Record creation timestamp (from AuditedModel)
@@ -166,6 +219,22 @@ class Order(AuditedModel):
         comment="Vehicle configuration identifier",
     )
 
+    dealer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dealers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Dealer handling the order",
+    )
+
+    manufacturer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("manufacturers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Manufacturer identifier",
+    )
+
     # Order status
     status: Mapped[OrderStatus] = mapped_column(
         SQLEnum(OrderStatus, name="order_status", create_constraint=True),
@@ -173,6 +242,22 @@ class Order(AuditedModel):
         default=OrderStatus.PENDING,
         index=True,
         comment="Current order status",
+    )
+
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        SQLEnum(PaymentStatus, name="payment_status", create_constraint=True),
+        nullable=False,
+        default=PaymentStatus.PENDING,
+        index=True,
+        comment="Current payment status",
+    )
+
+    fulfillment_status: Mapped[FulfillmentStatus] = mapped_column(
+        SQLEnum(FulfillmentStatus, name="fulfillment_status", create_constraint=True),
+        nullable=False,
+        default=FulfillmentStatus.PENDING,
+        index=True,
+        comment="Current fulfillment status",
     )
 
     # Pricing fields
@@ -195,6 +280,13 @@ class Order(AuditedModel):
         comment="Tax amount",
     )
 
+    total_tax: Mapped[Decimal] = mapped_column(
+        Numeric(precision=10, scale=2),
+        nullable=False,
+        default=Decimal("0.00"),
+        comment="Total tax amount",
+    )
+
     shipping_amount: Mapped[Decimal] = mapped_column(
         Numeric(precision=10, scale=2),
         nullable=False,
@@ -207,6 +299,13 @@ class Order(AuditedModel):
         nullable=False,
         default=Decimal("0.00"),
         comment="Applied discount amount",
+    )
+
+    total_fees: Mapped[Decimal] = mapped_column(
+        Numeric(precision=10, scale=2),
+        nullable=False,
+        default=Decimal("0.00"),
+        comment="Total fees amount",
     )
 
     # Order identification
@@ -223,6 +322,35 @@ class Order(AuditedModel):
         String(1000),
         nullable=True,
         comment="Additional order notes",
+    )
+
+    special_instructions: Mapped[Optional[str]] = mapped_column(
+        String(1000),
+        nullable=True,
+        comment="Special delivery or handling instructions",
+    )
+
+    # JSONB fields for flexible data storage
+    customer_info: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        comment="Customer information stored as JSONB",
+    )
+
+    delivery_address: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        comment="Delivery address stored as JSONB",
+    )
+
+    trade_in_info: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Trade-in vehicle information stored as JSONB",
     )
 
     # Delivery tracking
@@ -257,6 +385,23 @@ class Order(AuditedModel):
         back_populates="orders",
         foreign_keys=[configuration_id],
         lazy="selectin",
+    )
+
+    order_items: Mapped[list["OrderItem"]] = relationship(
+        "OrderItem",
+        back_populates="order",
+        foreign_keys="OrderItem.order_id",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    status_history: Mapped[list["OrderStatusHistory"]] = relationship(
+        "OrderStatusHistory",
+        back_populates="order",
+        foreign_keys="OrderStatusHistory.order_id",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="OrderStatusHistory.created_at.desc()",
     )
 
     # Table constraints and indexes
@@ -301,6 +446,46 @@ class Order(AuditedModel):
             "status",
             "deleted_at",
         ),
+        # Index for dealer orders
+        Index(
+            "ix_orders_dealer_status",
+            "dealer_id",
+            "status",
+        ),
+        # Index for manufacturer orders
+        Index(
+            "ix_orders_manufacturer_status",
+            "manufacturer_id",
+            "status",
+        ),
+        # Index for payment status
+        Index(
+            "ix_orders_payment_status",
+            "payment_status",
+        ),
+        # Index for fulfillment status
+        Index(
+            "ix_orders_fulfillment_status",
+            "fulfillment_status",
+        ),
+        # GIN index for customer_info JSONB search
+        Index(
+            "ix_orders_customer_info_gin",
+            "customer_info",
+            postgresql_using="gin",
+        ),
+        # GIN index for delivery_address JSONB search
+        Index(
+            "ix_orders_delivery_address_gin",
+            "delivery_address",
+            postgresql_using="gin",
+        ),
+        # GIN index for trade_in_info JSONB search
+        Index(
+            "ix_orders_trade_in_info_gin",
+            "trade_in_info",
+            postgresql_using="gin",
+        ),
         # Check constraints for data validation
         CheckConstraint(
             "total_amount >= 0",
@@ -315,12 +500,20 @@ class Order(AuditedModel):
             name="ck_orders_tax_amount_non_negative",
         ),
         CheckConstraint(
+            "total_tax >= 0",
+            name="ck_orders_total_tax_non_negative",
+        ),
+        CheckConstraint(
             "shipping_amount >= 0",
             name="ck_orders_shipping_amount_non_negative",
         ),
         CheckConstraint(
             "discount_amount >= 0",
             name="ck_orders_discount_amount_non_negative",
+        ),
+        CheckConstraint(
+            "total_fees >= 0",
+            name="ck_orders_total_fees_non_negative",
         ),
         CheckConstraint(
             "total_amount <= 10000000.00",
@@ -511,6 +704,7 @@ class Order(AuditedModel):
             self.subtotal
             + self.tax_amount
             + self.shipping_amount
+            + self.total_fees
             - self.discount_amount
         )
 
@@ -529,11 +723,17 @@ class Order(AuditedModel):
         if self.tax_amount < 0:
             errors.append("Tax amount cannot be negative")
 
+        if self.total_tax < 0:
+            errors.append("Total tax cannot be negative")
+
         if self.shipping_amount < 0:
             errors.append("Shipping amount cannot be negative")
 
         if self.discount_amount < 0:
             errors.append("Discount amount cannot be negative")
+
+        if self.total_fees < 0:
+            errors.append("Total fees cannot be negative")
 
         if self.discount_amount > self.subtotal:
             errors.append("Discount cannot exceed subtotal")
@@ -636,14 +836,24 @@ class Order(AuditedModel):
             "user_id": str(self.user_id),
             "vehicle_id": str(self.vehicle_id),
             "configuration_id": str(self.configuration_id),
+            "dealer_id": str(self.dealer_id) if self.dealer_id else None,
+            "manufacturer_id": str(self.manufacturer_id) if self.manufacturer_id else None,
             "status": self.status.value,
+            "payment_status": self.payment_status.value,
+            "fulfillment_status": self.fulfillment_status.value,
             "total_amount": float(self.total_amount),
             "subtotal": float(self.subtotal),
             "tax_amount": float(self.tax_amount),
+            "total_tax": float(self.total_tax),
             "shipping_amount": float(self.shipping_amount),
             "discount_amount": float(self.discount_amount),
+            "total_fees": float(self.total_fees),
             "formatted_total": self.formatted_total,
             "notes": self.notes,
+            "special_instructions": self.special_instructions,
+            "customer_info": self.customer_info,
+            "delivery_address": self.delivery_address,
+            "trade_in_info": self.trade_in_info,
             "estimated_delivery_date": (
                 self.estimated_delivery_date.isoformat()
                 if self.estimated_delivery_date
@@ -681,3 +891,241 @@ class Order(AuditedModel):
                 }
 
         return data
+
+
+class OrderItem(AuditedModel):
+    """
+    Order item model for individual items in an order.
+
+    Attributes:
+        id: Unique order item identifier (UUID)
+        order_id: Foreign key to parent order
+        vehicle_configuration_id: Foreign key to vehicle configuration
+        quantity: Quantity of items
+        unit_price: Price per unit
+        total_price: Total price for this item
+        created_at: Record creation timestamp (from AuditedModel)
+        updated_at: Last modification timestamp (from AuditedModel)
+        created_by: User who created this record (from AuditedModel)
+        updated_by: User who last modified this record (from AuditedModel)
+        deleted_at: Soft deletion timestamp (from AuditedModel)
+    """
+
+    __tablename__ = "order_items"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Unique order item identifier",
+    )
+
+    # Foreign keys
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Parent order identifier",
+    )
+
+    vehicle_configuration_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("vehicle_configurations.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+        comment="Vehicle configuration identifier",
+    )
+
+    # Item details
+    quantity: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        comment="Quantity of items",
+    )
+
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(precision=10, scale=2),
+        nullable=False,
+        comment="Price per unit",
+    )
+
+    total_price: Mapped[Decimal] = mapped_column(
+        Numeric(precision=10, scale=2),
+        nullable=False,
+        comment="Total price for this item",
+    )
+
+    # Relationships
+    order: Mapped["Order"] = relationship(
+        "Order",
+        back_populates="order_items",
+        foreign_keys=[order_id],
+        lazy="selectin",
+    )
+
+    vehicle_configuration: Mapped["VehicleConfiguration"] = relationship(
+        "VehicleConfiguration",
+        foreign_keys=[vehicle_configuration_id],
+        lazy="selectin",
+    )
+
+    # Table constraints and indexes
+    __table_args__ = (
+        Index(
+            "ix_order_items_order",
+            "order_id",
+        ),
+        Index(
+            "ix_order_items_configuration",
+            "vehicle_configuration_id",
+        ),
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_order_items_quantity_positive",
+        ),
+        CheckConstraint(
+            "unit_price >= 0",
+            name="ck_order_items_unit_price_non_negative",
+        ),
+        CheckConstraint(
+            "total_price >= 0",
+            name="ck_order_items_total_price_non_negative",
+        ),
+        {
+            "comment": "Individual items in an order",
+            "postgresql_partition_by": None,
+        },
+    )
+
+    def __repr__(self) -> str:
+        """
+        String representation of OrderItem.
+
+        Returns:
+            String representation showing key item attributes
+        """
+        return (
+            f"<OrderItem(id={self.id}, order_id={self.order_id}, "
+            f"quantity={self.quantity}, total_price={self.total_price})>"
+        )
+
+
+class OrderStatusHistory(AuditedModel):
+    """
+    Order status history model for audit trail.
+
+    Attributes:
+        id: Unique history record identifier (UUID)
+        order_id: Foreign key to parent order
+        from_status: Previous status
+        to_status: New status
+        changed_by: User who made the change
+        change_reason: Reason for status change
+        metadata: Additional metadata stored as JSONB
+        created_at: Record creation timestamp (from AuditedModel)
+        updated_at: Last modification timestamp (from AuditedModel)
+        created_by: User who created this record (from AuditedModel)
+        updated_by: User who last modified this record (from AuditedModel)
+        deleted_at: Soft deletion timestamp (from AuditedModel)
+    """
+
+    __tablename__ = "order_status_history"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Unique history record identifier",
+    )
+
+    # Foreign keys
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Parent order identifier",
+    )
+
+    # Status change details
+    from_status: Mapped[OrderStatus] = mapped_column(
+        SQLEnum(OrderStatus, name="order_status", create_constraint=True),
+        nullable=False,
+        comment="Previous status",
+    )
+
+    to_status: Mapped[OrderStatus] = mapped_column(
+        SQLEnum(OrderStatus, name="order_status", create_constraint=True),
+        nullable=False,
+        comment="New status",
+    )
+
+    changed_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User who made the change",
+    )
+
+    change_reason: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Reason for status change",
+    )
+
+    metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        comment="Additional metadata stored as JSONB",
+    )
+
+    # Relationships
+    order: Mapped["Order"] = relationship(
+        "Order",
+        back_populates="status_history",
+        foreign_keys=[order_id],
+        lazy="selectin",
+    )
+
+    # Table constraints and indexes
+    __table_args__ = (
+        Index(
+            "ix_order_status_history_order",
+            "order_id",
+        ),
+        Index(
+            "ix_order_status_history_order_created",
+            "order_id",
+            "created_at",
+        ),
+        Index(
+            "ix_order_status_history_to_status",
+            "to_status",
+        ),
+        Index(
+            "ix_order_status_history_metadata_gin",
+            "metadata",
+            postgresql_using="gin",
+        ),
+        {
+            "comment": "Order status change history for audit trail",
+            "postgresql_partition_by": None,
+        },
+    )
+
+    def __repr__(self) -> str:
+        """
+        String representation of OrderStatusHistory.
+
+        Returns:
+            String representation showing key history attributes
+        """
+        return (
+            f"<OrderStatusHistory(id={self.id}, order_id={self.order_id}, "
+            f"from_status={self.from_status.value}, to_status={self.to_status.value})>"
+        )

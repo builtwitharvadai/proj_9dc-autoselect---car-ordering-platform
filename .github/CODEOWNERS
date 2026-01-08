@@ -1,0 +1,79 @@
+# Code ownership configuration for review requirements
+# This file defines code ownership patterns for different parts of the codebase
+# to ensure proper review coverage and maintain code quality standards.
+
+# Default owners for everything in the repository
+# These owners will be requested for review on all pull requests
+* @autoselect-team/core-maintainers
+
+# Backend Python code ownership
+/backend/ @autoselect-team/backend-team
+/backend/src/ @autoselect-team/backend-team
+/backend/src/core/ @autoselect-team/backend-team @autoselect-team/platform-team
+/backend/src/database/ @autoselect-team/backend-team @autoselect-team/database-team
+/backend/src/database/models/ @autoselect-team/backend-team @autoselect-team/database-team
+/backend/src/cache/ @autoselect-team/backend-team @autoselect-team/platform-team
+/backend/src/services/ @autoselect-team/backend-team
+
+# Database migrations require database team approval
+/backend/migrations/ @autoselect-team/database-team
+/backend/alembic.ini @autoselect-team/database-team
+
+# Backend configuration and dependencies
+/backend/requirements.txt @autoselect-team/backend-team @autoselect-team/security-team
+/backend/Dockerfile @autoselect-team/backend-team @autoselect-team/devops-team
+/backend/.dockerignore @autoselect-team/backend-team @autoselect-team/devops-team
+/backend/.flake8 @autoselect-team/backend-team
+
+# Backend tests
+/backend/tests/ @autoselect-team/backend-team
+/backend/tests/conftest.py @autoselect-team/backend-team @autoselect-team/qa-team
+
+# Frontend TypeScript/React code ownership
+/frontend/ @autoselect-team/frontend-team
+/frontend/src/ @autoselect-team/frontend-team
+/frontend/src/components/ @autoselect-team/frontend-team
+/frontend/src/pages/ @autoselect-team/frontend-team
+/frontend/src/types/ @autoselect-team/frontend-team
+
+# Frontend configuration and build
+/frontend/package.json @autoselect-team/frontend-team @autoselect-team/security-team
+/frontend/vite.config.ts @autoselect-team/frontend-team
+/frontend/tsconfig.json @autoselect-team/frontend-team
+/frontend/tailwind.config.js @autoselect-team/frontend-team
+/frontend/postcss.config.js @autoselect-team/frontend-team
+/frontend/eslint.config.js @autoselect-team/frontend-team
+/frontend/.prettierrc.json @autoselect-team/frontend-team
+/frontend/Dockerfile @autoselect-team/frontend-team @autoselect-team/devops-team
+/frontend/.dockerignore @autoselect-team/frontend-team @autoselect-team/devops-team
+
+# Infrastructure and DevOps
+/docker-compose.yml @autoselect-team/devops-team
+/docker-compose.prod.yml @autoselect-team/devops-team @autoselect-team/security-team
+/scripts/ @autoselect-team/devops-team
+/scripts/docker-setup.sh @autoselect-team/devops-team
+
+# CI/CD workflows require DevOps and security review
+/.github/workflows/ @autoselect-team/devops-team @autoselect-team/security-team
+/.github/workflows/ci.yml @autoselect-team/devops-team @autoselect-team/qa-team
+/.github/workflows/deploy.yml @autoselect-team/devops-team @autoselect-team/security-team
+/.github/workflows/security.yml @autoselect-team/devops-team @autoselect-team/security-team
+
+# GitHub configuration
+/.github/pull_request_template.md @autoselect-team/core-maintainers
+/.github/CODEOWNERS @autoselect-team/core-maintainers
+
+# Documentation
+/README.md @autoselect-team/core-maintainers
+/backend/README.md @autoselect-team/backend-team
+/frontend/README.md @autoselect-team/frontend-team
+
+# Environment and configuration files
+/.env.example @autoselect-team/devops-team @autoselect-team/security-team
+/.gitignore @autoselect-team/core-maintainers
+
+# Security-sensitive files require security team approval
+**/requirements.txt @autoselect-team/security-team
+**/package.json @autoselect-team/security-team
+**/Dockerfile @autoselect-team/security-team
+**/.env* @autoselect-team/security-team

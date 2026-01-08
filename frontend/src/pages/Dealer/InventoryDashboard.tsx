@@ -18,7 +18,7 @@ const API_BASE_URL = import.meta.env['VITE_API_URL'] ?? 'http://localhost:8000';
 /**
  * Dashboard view modes
  */
-type DashboardView = 'overview' | 'inventory' | 'upload' | 'edit';
+type DashboardView = 'overview' | 'inventory' | 'upload' | 'edit' | 'orders';
 
 /**
  * API response for inventory list
@@ -36,6 +36,16 @@ interface InventoryListResponse {
  */
 interface StatsResponse {
   readonly stats: DashboardStatsType;
+}
+
+/**
+ * Order summary statistics
+ */
+interface OrderSummaryStats {
+  readonly totalOrders: number;
+  readonly pendingOrders: number;
+  readonly processingOrders: number;
+  readonly completedOrders: number;
 }
 
 /**
@@ -59,6 +69,7 @@ interface InventoryDashboardProps {
  * - Individual vehicle editing
  * - Stock level adjustments
  * - Vehicle status management
+ * - Order management navigation
  * - Responsive design for all screen sizes
  * - Role-based access control
  */
@@ -70,6 +81,7 @@ export default function InventoryDashboard({
   const [currentView, setCurrentView] = useState<DashboardView>('overview');
   const [inventory, setInventory] = useState<readonly DealerInventoryWithVehicle[]>([]);
   const [stats, setStats] = useState<DashboardStatsType | null>(null);
+  const [orderStats, setOrderStats] = useState<OrderSummaryStats | null>(null);
   const [filters, setFilters] = useState<DealerInventoryFilters>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,16 +173,47 @@ export default function InventoryDashboard({
   }, [dealerId, navigate]);
 
   /**
+   * Fetch order summary statistics from API
+   */
+  const fetchOrderStats = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/dealer/orders/summary?dealerId=${dealerId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          navigate('/login');
+          return;
+        }
+        throw new Error(`Failed to fetch order statistics: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as { readonly stats: OrderSummaryStats };
+      setOrderStats(data.stats);
+    } catch (err) {
+      console.error('Error fetching order statistics:', err);
+    }
+  }, [dealerId, navigate]);
+
+  /**
    * Refresh all dashboard data
    */
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([fetchInventory(), fetchStats()]);
+      await Promise.all([fetchInventory(), fetchStats(), fetchOrderStats()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchInventory, fetchStats]);
+  }, [fetchInventory, fetchStats, fetchOrderStats]);
 
   /**
    * Handle vehicle edit action
@@ -366,12 +409,20 @@ export default function InventoryDashboard({
   }, []);
 
   /**
+   * Handle navigation to order management
+   */
+  const handleNavigateToOrders = useCallback(() => {
+    navigate(`/dealer/orders?dealerId=${dealerId}`);
+  }, [navigate, dealerId]);
+
+  /**
    * Initial data fetch
    */
   useEffect(() => {
     void fetchInventory();
     void fetchStats();
-  }, [fetchInventory, fetchStats]);
+    void fetchOrderStats();
+  }, [fetchInventory, fetchStats, fetchOrderStats]);
 
   /**
    * Navigation items configuration
@@ -381,6 +432,7 @@ export default function InventoryDashboard({
       { id: 'overview' as const, label: 'Overview', icon: '📊' },
       { id: 'inventory' as const, label: 'Inventory', icon: '🚗' },
       { id: 'upload' as const, label: 'Bulk Upload', icon: '📤' },
+      { id: 'orders' as const, label: 'Orders', icon: '📦' },
     ],
     [],
   );
@@ -430,7 +482,13 @@ export default function InventoryDashboard({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setCurrentView(item.id)}
+                onClick={() => {
+                  if (item.id === 'orders') {
+                    handleNavigateToOrders();
+                  } else {
+                    setCurrentView(item.id);
+                  }
+                }}
                 className={`flex items-center gap-2 px-3 py-4 border-b-2 text-sm font-medium transition-colors focus:outline-none ${
                   currentView === item.id
                     ? 'border-blue-600 text-blue-600'
@@ -488,26 +546,98 @@ export default function InventoryDashboard({
 
         {/* View Content */}
         {currentView === 'overview' && (
-          <DashboardStats
-            stats={
-              stats ?? {
-                totalVehicles: 0,
-                activeVehicles: 0,
-                inactiveVehicles: 0,
-                soldVehicles: 0,
-                reservedVehicles: 0,
-                lowStockCount: 0,
-                outOfStockCount: 0,
-                totalStockLevel: 0,
-                availableStockLevel: 0,
-                reservedStockLevel: 0,
-                recentUpdates: 0,
-                lastUpdatedAt: new Date().toISOString(),
+          <>
+            <DashboardStats
+              stats={
+                stats ?? {
+                  totalVehicles: 0,
+                  activeVehicles: 0,
+                  inactiveVehicles: 0,
+                  soldVehicles: 0,
+                  reservedVehicles: 0,
+                  lowStockCount: 0,
+                  outOfStockCount: 0,
+                  totalStockLevel: 0,
+                  availableStockLevel: 0,
+                  reservedStockLevel: 0,
+                  recentUpdates: 0,
+                  lastUpdatedAt: new Date().toISOString(),
+                }
               }
-            }
-            isLoading={isLoading}
-            onRefresh={handleRefresh}
-          />
+              isLoading={isLoading}
+              onRefresh={handleRefresh}
+            />
+
+            {/* Order Summary Section */}
+            {orderStats && (
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Order Summary</h2>
+                  <button
+                    type="button"
+                    onClick={handleNavigateToOrders}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View All Orders →
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Orders</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">
+                          {orderStats.totalOrders}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">📦</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Pending</p>
+                        <p className="text-2xl font-bold text-yellow-600 mt-1">
+                          {orderStats.pendingOrders}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">⏳</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Processing</p>
+                        <p className="text-2xl font-bold text-blue-600 mt-1">
+                          {orderStats.processingOrders}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">⚙️</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Completed</p>
+                        <p className="text-2xl font-bold text-green-600 mt-1">
+                          {orderStats.completedOrders}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">✅</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {currentView === 'inventory' && (

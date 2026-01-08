@@ -19,6 +19,8 @@ from src.api.v1.auth import router as auth_router
 from src.api.v1.cart import router as cart_router
 from src.api.v1.configuration import router as configuration_router
 from src.api.v1.dealer import router as dealer_router
+from src.api.v1.dealer_management import router as dealer_management_router
+from src.api.v1.recommendations import router as recommendations_router
 from src.api.v1.saved_configurations import router as saved_configurations_router
 from src.api.v1.vehicles import router as vehicles_router
 from src.core.config import get_settings
@@ -84,6 +86,35 @@ async def cleanup_expired_reservations():
         await asyncio.sleep(60)  # Run every minute
 
 
+async def update_recommendation_models():
+    """
+    Background task to update recommendation models.
+
+    Runs periodically to refresh recommendation models based on recent
+    user interactions and configuration selections.
+    """
+    from src.services.recommendations.service import RecommendationService
+
+    while True:
+        try:
+            async with get_db_session() as session:
+                service = RecommendationService(
+                    db_session=session,
+                    redis_client=None,
+                    enable_cache=False,
+                    enable_analytics=True,
+                )
+                await service.update_recommendation_models()
+                logger.info("Recommendation models updated successfully")
+        except Exception as e:
+            logger.error(
+                "Failed to update recommendation models",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+        await asyncio.sleep(3600)  # Run every hour
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
@@ -115,7 +146,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start background tasks
     cart_cleanup_task = asyncio.create_task(cleanup_expired_carts())
     reservation_cleanup_task = asyncio.create_task(cleanup_expired_reservations())
-    logger.info("Background tasks started for cart and reservation cleanup")
+    recommendation_update_task = asyncio.create_task(update_recommendation_models())
+    logger.info("Background tasks started for cart, reservation cleanup, and recommendation model updates")
 
     yield
 
@@ -125,12 +157,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Cancel background tasks
         cart_cleanup_task.cancel()
         reservation_cleanup_task.cancel()
+        recommendation_update_task.cancel()
         try:
             await cart_cleanup_task
         except asyncio.CancelledError:
             pass
         try:
             await reservation_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await recommendation_update_task
         except asyncio.CancelledError:
             pass
         logger.info("Background tasks stopped")
@@ -380,6 +417,20 @@ app.include_router(
     saved_configurations_router,
     prefix="/api/v1",
     tags=["Saved Configurations"]
+)
+
+# Include recommendations router
+app.include_router(
+    recommendations_router,
+    prefix="/api/v1",
+    tags=["Recommendations"]
+)
+
+# Include dealer management router
+app.include_router(
+    dealer_management_router,
+    prefix="/api/v1",
+    tags=["Dealer Management"]
 )
 
 # Service routers will be added here

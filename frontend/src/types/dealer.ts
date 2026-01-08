@@ -25,6 +25,37 @@ export type AuditAction =
   | 'bulk_upload';
 
 /**
+ * Order status for dealer order management
+ */
+export type DealerOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'in_production'
+  | 'ready_for_pickup'
+  | 'completed'
+  | 'cancelled';
+
+/**
+ * Fulfillment action types
+ */
+export type FulfillmentActionType =
+  | 'confirm'
+  | 'start_production'
+  | 'mark_ready'
+  | 'complete'
+  | 'cancel'
+  | 'add_note';
+
+/**
+ * Bulk order operation types
+ */
+export type BulkOrderOperationType =
+  | 'confirm_multiple'
+  | 'cancel_multiple'
+  | 'export_selected'
+  | 'update_status';
+
+/**
  * CSV upload validation error
  */
 export interface CSVValidationError {
@@ -66,6 +97,163 @@ export interface DealerInventoryWithVehicle extends DealerInventory {
     readonly price: number;
     readonly imageUrl: string;
   };
+}
+
+/**
+ * Dealer order item
+ */
+export interface DealerOrder {
+  readonly id: string;
+  readonly orderNumber: string;
+  readonly dealerId: string;
+  readonly customerId: string;
+  readonly customerName: string;
+  readonly customerEmail: string;
+  readonly customerPhone: string;
+  readonly vehicleId: string;
+  readonly vehicleName: string;
+  readonly vehicleImage: string;
+  readonly vin?: string;
+  readonly status: DealerOrderStatus;
+  readonly totalAmount: number;
+  readonly depositAmount: number;
+  readonly notes?: string;
+  readonly dealerNotes?: string;
+  readonly estimatedCompletionDate?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly confirmedAt?: string;
+  readonly completedAt?: string;
+  readonly cancelledAt?: string;
+}
+
+/**
+ * Order queue filters
+ */
+export interface OrderQueueFilters {
+  readonly dealerId?: string;
+  readonly status?: readonly DealerOrderStatus[];
+  readonly customerId?: string;
+  readonly vehicleId?: string;
+  readonly orderNumber?: string;
+  readonly searchQuery?: string;
+  readonly startDate?: string;
+  readonly endDate?: string;
+  readonly minAmount?: number;
+  readonly maxAmount?: number;
+}
+
+/**
+ * Order queue sorting options
+ */
+export interface OrderQueueSortOptions {
+  readonly sortBy?: 'createdAt' | 'updatedAt' | 'orderNumber' | 'totalAmount' | 'status';
+  readonly sortDirection?: 'asc' | 'desc';
+}
+
+/**
+ * Order queue request
+ */
+export interface OrderQueueRequest {
+  readonly filters?: OrderQueueFilters;
+  readonly sortOptions?: OrderQueueSortOptions;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+/**
+ * Order queue response
+ */
+export interface OrderQueueResponse {
+  readonly orders: readonly DealerOrder[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly totalPages: number;
+  readonly hasNextPage: boolean;
+  readonly hasPreviousPage: boolean;
+}
+
+/**
+ * Fulfillment action request
+ */
+export interface FulfillmentActionRequest {
+  readonly orderId: string;
+  readonly action: FulfillmentActionType;
+  readonly notes?: string;
+  readonly estimatedCompletionDate?: string;
+}
+
+/**
+ * Fulfillment action response
+ */
+export interface FulfillmentActionResponse {
+  readonly orderId: string;
+  readonly previousStatus: DealerOrderStatus;
+  readonly newStatus: DealerOrderStatus;
+  readonly action: FulfillmentActionType;
+  readonly performedAt: string;
+  readonly performedBy: string;
+  readonly notes?: string;
+}
+
+/**
+ * Bulk order operation request
+ */
+export interface BulkOrderOperationRequest {
+  readonly orderIds: readonly string[];
+  readonly operation: BulkOrderOperationType;
+  readonly targetStatus?: DealerOrderStatus;
+  readonly notes?: string;
+}
+
+/**
+ * Bulk order operation response
+ */
+export interface BulkOrderOperationResponse {
+  readonly operation: BulkOrderOperationType;
+  readonly totalOrders: number;
+  readonly successCount: number;
+  readonly failureCount: number;
+  readonly errors: readonly {
+    readonly orderId: string;
+    readonly error: string;
+  }[];
+  readonly processedAt: string;
+}
+
+/**
+ * Order detail with full information
+ */
+export interface DealerOrderDetail extends DealerOrder {
+  readonly vehicle: {
+    readonly make: string;
+    readonly model: string;
+    readonly year: number;
+    readonly trim?: string;
+    readonly price: number;
+    readonly imageUrl: string;
+    readonly specifications: Record<string, string>;
+  };
+  readonly customer: {
+    readonly id: string;
+    readonly name: string;
+    readonly email: string;
+    readonly phone: string;
+    readonly address?: string;
+  };
+  readonly configuration?: {
+    readonly id: string;
+    readonly options: readonly string[];
+    readonly packages: readonly string[];
+    readonly customizations: Record<string, string>;
+  };
+  readonly statusHistory: readonly {
+    readonly status: DealerOrderStatus;
+    readonly changedAt: string;
+    readonly changedBy: string;
+    readonly notes?: string;
+  }[];
 }
 
 /**
@@ -334,6 +522,62 @@ export function isBulkUploadComplete(
  */
 export function hasBulkUploadErrors(response: BulkUploadResponse): boolean {
   return response.errorCount > 0 && response.errors.length > 0;
+}
+
+/**
+ * Type guard to check if order is pending
+ */
+export function isOrderPending(order: DealerOrder): boolean {
+  return order.status === 'pending';
+}
+
+/**
+ * Type guard to check if order is confirmed
+ */
+export function isOrderConfirmed(order: DealerOrder): boolean {
+  return order.status === 'confirmed';
+}
+
+/**
+ * Type guard to check if order is in production
+ */
+export function isOrderInProduction(order: DealerOrder): boolean {
+  return order.status === 'in_production';
+}
+
+/**
+ * Type guard to check if order is ready for pickup
+ */
+export function isOrderReadyForPickup(order: DealerOrder): boolean {
+  return order.status === 'ready_for_pickup';
+}
+
+/**
+ * Type guard to check if order is completed
+ */
+export function isOrderCompleted(order: DealerOrder): boolean {
+  return order.status === 'completed';
+}
+
+/**
+ * Type guard to check if order is cancelled
+ */
+export function isOrderCancelled(order: DealerOrder): boolean {
+  return order.status === 'cancelled';
+}
+
+/**
+ * Type guard to check if order can be confirmed
+ */
+export function canConfirmOrder(order: DealerOrder): boolean {
+  return order.status === 'pending';
+}
+
+/**
+ * Type guard to check if order can be cancelled
+ */
+export function canCancelOrder(order: DealerOrder): boolean {
+  return ['pending', 'confirmed'].includes(order.status);
 }
 
 /**

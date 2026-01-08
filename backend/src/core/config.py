@@ -174,6 +174,22 @@ class Settings(BaseSettings):
         description="Health check endpoint path",
     )
 
+    # Elasticsearch Configuration
+    elasticsearch_url: str = Field(
+        default="http://elasticsearch:9200",
+        description="Elasticsearch connection URL",
+    )
+
+    elasticsearch_index_name: str = Field(
+        default="vehicles",
+        description="Elasticsearch index name for vehicle search",
+    )
+
+    elasticsearch_enabled: bool = Field(
+        default=True,
+        description="Enable Elasticsearch search functionality",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:
@@ -237,6 +253,27 @@ class Settings(BaseSettings):
         """
         if not v.startswith(("redis://", "rediss://")):
             raise ValueError("Redis URL must start with 'redis://' or 'rediss://'")
+        return v
+
+    @field_validator("elasticsearch_url")
+    @classmethod
+    def validate_elasticsearch_url(cls, v: str) -> str:
+        """
+        Validate Elasticsearch URL format.
+
+        Args:
+            v: Elasticsearch URL value
+
+        Returns:
+            Validated Elasticsearch URL
+
+        Raises:
+            ValueError: If Elasticsearch URL format is invalid
+        """
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(
+                "Elasticsearch URL must start with 'http://' or 'https://'"
+            )
         return v
 
     @field_validator("cors_origins", mode="before")

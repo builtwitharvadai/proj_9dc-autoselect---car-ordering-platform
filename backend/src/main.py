@@ -19,6 +19,7 @@ from src.api.v1.auth import router as auth_router
 from src.api.v1.cart import router as cart_router
 from src.api.v1.configuration import router as configuration_router
 from src.api.v1.dealer import router as dealer_router
+from src.api.v1.saved_configurations import router as saved_configurations_router
 from src.api.v1.vehicles import router as vehicles_router
 from src.core.config import get_settings
 from src.core.logging import (
@@ -373,6 +374,13 @@ app.include_router(configuration_router, prefix="/api/v1", tags=["Configuration"
 
 # Include cart router
 app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
+
+# Include saved configurations router
+app.include_router(
+    saved_configurations_router,
+    prefix="/api/v1",
+    tags=["Saved Configurations"]
+)
 
 # Service routers will be added here
 # Example:

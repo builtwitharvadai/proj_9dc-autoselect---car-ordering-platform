@@ -1,0 +1,405 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoselect-backend-config-staging
+  namespace: autoselect-staging
+  labels:
+    app: autoselect
+    component: backend
+    tier: application
+    environment: staging
+  annotations:
+    description: "Backend application configuration for AutoSelect platform - Staging Environment"
+data:
+  # Application Environment
+  APP_ENV: "staging"
+  DEBUG: "true"
+  LOG_LEVEL: "debug"
+  LOG_FORMAT: "json"
+  
+  # Server Configuration
+  PORT: "8000"
+  HOST: "0.0.0.0"
+  WORKERS: "2"
+  WORKER_CLASS: "uvicorn.workers.UvicornWorker"
+  WORKER_CONNECTIONS: "500"
+  KEEPALIVE: "5"
+  TIMEOUT: "30"
+  GRACEFUL_TIMEOUT: "30"
+  
+  # Database Configuration
+  DB_HOST: "postgres-staging"
+  DB_PORT: "5432"
+  DB_NAME: "autoselect_staging"
+  DB_USER: "autoselect_staging"
+  DB_POOL_SIZE: "5"
+  DB_MAX_OVERFLOW: "10"
+  DB_POOL_TIMEOUT: "30"
+  DB_POOL_RECYCLE: "3600"
+  DB_ECHO: "true"
+  DB_ECHO_POOL: "false"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis-staging"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_MAX_CONNECTIONS: "25"
+  REDIS_SOCKET_TIMEOUT: "5"
+  REDIS_SOCKET_CONNECT_TIMEOUT: "5"
+  REDIS_SOCKET_KEEPALIVE: "true"
+  REDIS_HEALTH_CHECK_INTERVAL: "30"
+  
+  # Cache Configuration
+  CACHE_ENABLED: "true"
+  CACHE_DEFAULT_TTL: "1800"
+  CACHE_KEY_PREFIX: "autoselect:staging"
+  CACHE_SERIALIZER: "json"
+  
+  # API Configuration
+  API_V1_PREFIX: "/api/v1"
+  API_TITLE: "AutoSelect API - Staging"
+  API_VERSION: "1.0.0"
+  API_DESCRIPTION: "Car Ordering Platform API - Staging Environment"
+  API_DOCS_URL: "/docs"
+  API_REDOC_URL: "/redoc"
+  API_OPENAPI_URL: "/openapi.json"
+  
+  # CORS Configuration
+  CORS_ENABLED: "true"
+  CORS_ALLOW_CREDENTIALS: "true"
+  CORS_ALLOW_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  CORS_ALLOW_HEADERS: "*"
+  CORS_EXPOSE_HEADERS: "X-Request-ID,X-Response-Time"
+  CORS_MAX_AGE: "3600"
+  
+  # Security Configuration
+  ALLOWED_HOSTS: "*"
+  TRUSTED_HOSTS: "*"
+  SECURE_COOKIES: "false"
+  SESSION_COOKIE_SECURE: "false"
+  SESSION_COOKIE_HTTPONLY: "true"
+  SESSION_COOKIE_SAMESITE: "lax"
+  
+  # Rate Limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_PER_MINUTE: "120"
+  RATE_LIMIT_PER_HOUR: "2000"
+  RATE_LIMIT_PER_DAY: "20000"
+  
+  # Authentication Configuration
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  REFRESH_TOKEN_EXPIRE_DAYS: "14"
+  PASSWORD_MIN_LENGTH: "8"
+  PASSWORD_REQUIRE_UPPERCASE: "true"
+  PASSWORD_REQUIRE_LOWERCASE: "true"
+  PASSWORD_REQUIRE_DIGITS: "true"
+  PASSWORD_REQUIRE_SPECIAL: "false"
+  
+  # Email Configuration
+  EMAIL_ENABLED: "true"
+  EMAIL_FROM_NAME: "AutoSelect Staging"
+  EMAIL_FROM_ADDRESS: "noreply-staging@autoselect.local"
+  SMTP_HOST: "mailhog-staging"
+  SMTP_PORT: "1025"
+  SMTP_TLS: "false"
+  SMTP_SSL: "false"
+  
+  # File Upload Configuration
+  UPLOAD_MAX_SIZE: "10485760"
+  UPLOAD_ALLOWED_EXTENSIONS: "jpg,jpeg,png,pdf,csv"
+  UPLOAD_DIRECTORY: "/app/uploads"
+  
+  # Pagination Configuration
+  DEFAULT_PAGE_SIZE: "20"
+  MAX_PAGE_SIZE: "100"
+  
+  # Feature Flags
+  FEATURE_VEHICLE_CONFIGURATION: "true"
+  FEATURE_ORDER_TRACKING: "true"
+  FEATURE_INVENTORY_MANAGEMENT: "true"
+  FEATURE_USER_REGISTRATION: "true"
+  FEATURE_ADMIN_PANEL: "true"
+  FEATURE_ANALYTICS: "true"
+  FEATURE_NOTIFICATIONS: "true"
+  FEATURE_BLUE_GREEN_DEPLOYMENT: "true"
+  FEATURE_SECURITY_SCANNING: "true"
+  
+  # Monitoring and Observability
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  METRICS_PATH: "/metrics"
+  HEALTH_CHECK_PATH: "/health"
+  READINESS_CHECK_PATH: "/ready"
+  
+  # Logging Configuration
+  LOG_JSON_FORMAT: "true"
+  LOG_INCLUDE_TIMESTAMP: "true"
+  LOG_INCLUDE_LEVEL: "true"
+  LOG_INCLUDE_LOGGER_NAME: "true"
+  LOG_INCLUDE_REQUEST_ID: "true"
+  LOG_INCLUDE_USER_ID: "true"
+  LOG_SQL_QUERIES: "true"
+  LOG_SLOW_QUERIES: "true"
+  LOG_SLOW_QUERY_THRESHOLD: "0.5"
+  
+  # Performance Configuration
+  ENABLE_QUERY_OPTIMIZATION: "true"
+  ENABLE_CONNECTION_POOLING: "true"
+  ENABLE_STATEMENT_CACHING: "true"
+  ENABLE_LAZY_LOADING: "false"
+  
+  # Background Tasks
+  CELERY_BROKER_URL: "redis://redis-staging:6379/1"
+  CELERY_RESULT_BACKEND: "redis://redis-staging:6379/2"
+  CELERY_TASK_SERIALIZER: "json"
+  CELERY_RESULT_SERIALIZER: "json"
+  CELERY_ACCEPT_CONTENT: "json"
+  CELERY_TIMEZONE: "UTC"
+  CELERY_ENABLE_UTC: "true"
+  
+  # External Services
+  EXTERNAL_API_TIMEOUT: "30"
+  EXTERNAL_API_RETRY_COUNT: "3"
+  EXTERNAL_API_RETRY_DELAY: "1"
+  
+  # Development Tools
+  RELOAD_ON_CHANGE: "true"
+  SHOW_SQL_QUERIES: "true"
+  ENABLE_PROFILING: "true"
+  ENABLE_DEBUG_TOOLBAR: "true"
+  
+  # Staging-Specific Configuration
+  STAGING_DATA_RESET_ENABLED: "true"
+  STAGING_TEST_DATA_ENABLED: "true"
+  STAGING_MOCK_EXTERNAL_SERVICES: "true"
+  STAGING_ALLOW_TEST_USERS: "true"
+  
+  # Security Scanning Configuration
+  SECURITY_SCAN_ENABLED: "true"
+  SNYK_ENABLED: "true"
+  OWASP_DEPENDENCY_CHECK_ENABLED: "true"
+  BANDIT_ENABLED: "true"
+  
+  # Blue-Green Deployment Configuration
+  DEPLOYMENT_STRATEGY: "blue-green"
+  DEPLOYMENT_HEALTH_CHECK_INTERVAL: "10"
+  DEPLOYMENT_HEALTH_CHECK_TIMEOUT: "5"
+  DEPLOYMENT_SMOKE_TEST_ENABLED: "true"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoselect-frontend-config-staging
+  namespace: autoselect-staging
+  labels:
+    app: autoselect
+    component: frontend
+    tier: presentation
+    environment: staging
+  annotations:
+    description: "Frontend application configuration for AutoSelect platform - Staging Environment"
+data:
+  # Application Environment
+  NODE_ENV: "staging"
+  VITE_APP_ENV: "staging"
+  
+  # API Configuration
+  VITE_API_URL: "http://autoselect-backend-staging:8000"
+  VITE_API_BASE_PATH: "/api/v1"
+  VITE_API_TIMEOUT: "30000"
+  
+  # Application Configuration
+  VITE_APP_NAME: "AutoSelect - Staging"
+  VITE_APP_VERSION: "1.0.0-staging"
+  VITE_APP_DESCRIPTION: "Car Ordering Platform - Staging Environment"
+  
+  # Feature Flags
+  VITE_FEATURE_VEHICLE_CONFIGURATION: "true"
+  VITE_FEATURE_ORDER_TRACKING: "true"
+  VITE_FEATURE_USER_REGISTRATION: "true"
+  VITE_FEATURE_ANALYTICS: "true"
+  VITE_FEATURE_DEBUG_PANEL: "true"
+  VITE_FEATURE_PERFORMANCE_MONITORING: "true"
+  
+  # UI Configuration
+  VITE_DEFAULT_THEME: "light"
+  VITE_ENABLE_DARK_MODE: "true"
+  VITE_DEFAULT_LANGUAGE: "en"
+  VITE_SUPPORTED_LANGUAGES: "en,es,fr,de"
+  
+  # Performance Configuration
+  VITE_ENABLE_SERVICE_WORKER: "false"
+  VITE_ENABLE_CODE_SPLITTING: "true"
+  VITE_ENABLE_LAZY_LOADING: "true"
+  
+  # Development Configuration
+  VITE_ENABLE_DEVTOOLS: "true"
+  VITE_ENABLE_HOT_RELOAD: "true"
+  VITE_SOURCE_MAPS: "true"
+  
+  # Staging-Specific Configuration
+  VITE_STAGING_BANNER_ENABLED: "true"
+  VITE_STAGING_TEST_DATA_VISIBLE: "true"
+  VITE_STAGING_MOCK_PAYMENTS: "true"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoselect-postgres-config-staging
+  namespace: autoselect-staging
+  labels:
+    app: autoselect
+    component: postgres
+    tier: database
+    environment: staging
+  annotations:
+    description: "PostgreSQL database configuration for AutoSelect platform - Staging Environment"
+data:
+  POSTGRES_DB: "autoselect_staging"
+  POSTGRES_USER: "autoselect_staging"
+  PGDATA: "/var/lib/postgresql/data/pgdata"
+  
+  # PostgreSQL Configuration
+  POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+  POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+  
+  # Connection Settings
+  MAX_CONNECTIONS: "50"
+  SHARED_BUFFERS: "128MB"
+  EFFECTIVE_CACHE_SIZE: "512MB"
+  MAINTENANCE_WORK_MEM: "32MB"
+  CHECKPOINT_COMPLETION_TARGET: "0.9"
+  WAL_BUFFERS: "8MB"
+  DEFAULT_STATISTICS_TARGET: "100"
+  RANDOM_PAGE_COST: "1.1"
+  EFFECTIVE_IO_CONCURRENCY: "200"
+  WORK_MEM: "2MB"
+  MIN_WAL_SIZE: "512MB"
+  MAX_WAL_SIZE: "2GB"
+  
+  # Logging Configuration
+  LOG_DESTINATION: "stderr"
+  LOGGING_COLLECTOR: "on"
+  LOG_DIRECTORY: "/var/log/postgresql"
+  LOG_FILENAME: "postgresql-%Y-%m-%d_%H%M%S.log"
+  LOG_ROTATION_AGE: "1d"
+  LOG_ROTATION_SIZE: "100MB"
+  LOG_MIN_DURATION_STATEMENT: "500"
+  LOG_LINE_PREFIX: "%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h "
+  LOG_TIMEZONE: "UTC"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoselect-redis-config-staging
+  namespace: autoselect-staging
+  labels:
+    app: autoselect
+    component: redis
+    tier: cache
+    environment: staging
+  annotations:
+    description: "Redis cache configuration for AutoSelect platform - Staging Environment"
+data:
+  # Redis Configuration
+  REDIS_MAXMEMORY: "128mb"
+  REDIS_MAXMEMORY_POLICY: "allkeys-lru"
+  REDIS_SAVE: "900 1 300 10 60 10000"
+  REDIS_APPENDONLY: "yes"
+  REDIS_APPENDFSYNC: "everysec"
+  REDIS_TCP_BACKLOG: "511"
+  REDIS_TIMEOUT: "0"
+  REDIS_TCP_KEEPALIVE: "300"
+  REDIS_DATABASES: "16"
+  REDIS_LOGLEVEL: "notice"
+  REDIS_LOGFILE: ""
+  
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    protected-mode yes
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+    
+    # General
+    daemonize no
+    supervised no
+    pidfile /var/run/redis_6379.pid
+    loglevel notice
+    logfile ""
+    databases 16
+    
+    # Snapshotting
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+    
+    # Replication
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-disable-tcp-nodelay no
+    replica-priority 100
+    
+    # Security
+    requirepass ""
+    
+    # Memory Management
+    maxmemory 128mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # Append Only Mode
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+    
+    # Lua Scripting
+    lua-time-limit 5000
+    
+    # Slow Log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    
+    # Latency Monitor
+    latency-monitor-threshold 0
+    
+    # Event Notification
+    notify-keyspace-events ""
+    
+    # Advanced Config
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    list-max-ziplist-size -2
+    list-compress-depth 0
+    set-max-intset-entries 512
+    zset-max-ziplist-entries 128
+    zset-max-ziplist-value 64
+    hll-sparse-max-bytes 3000
+    stream-node-max-bytes 4096
+    stream-node-max-entries 100
+    activerehashing yes
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    hz 10
+    dynamic-hz yes
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes

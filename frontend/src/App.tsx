@@ -3,9 +3,11 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ComparisonProvider } from './contexts/ComparisonContext';
+import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import Browse from './pages/Browse';
 import VehicleDetailPage from './components/VehicleDetail/VehicleDetailPage';
 import ComparisonPage from './components/VehicleComparison/ComparisonPage';
+import Configure from './pages/Configure';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,19 +20,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-const Configure: React.FC = () => {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
-      <h2 className="mb-4 text-2xl font-bold text-gray-900">
-        Configure Your Vehicle
-      </h2>
-      <p className="text-gray-600">
-        Customize your vehicle with available options and packages.
-      </p>
-    </div>
-  );
-};
 
 const Cart: React.FC = () => {
   return (
@@ -186,6 +175,7 @@ const App: React.FC = () => {
               <Route path="/browse" element={<Browse />} />
               <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
               <Route path="/configure" element={<Configure />} />
+              <Route path="/configure/:vehicleId" element={<Configure />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/track" element={<Track />} />
               <Route path="/compare" element={<ComparisonPage />} />

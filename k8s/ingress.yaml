@@ -1,0 +1,100 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autoselect-ingress
+  namespace: autoselect-dev
+  labels:
+    app: autoselect
+    component: ingress
+    tier: networking
+    environment: development
+    version: "1.0.0"
+  annotations:
+    description: "AutoSelect ingress for external traffic routing"
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "3600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/enable-access-log: "true"
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+spec:
+  ingressClassName: nginx
+  
+  rules:
+    - host: autoselect.local
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /ready
+            pathType: Exact
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /redoc
+            pathType: Prefix
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /openapi.json
+            pathType: Exact
+            backend:
+              service:
+                name: autoselect-backend-svc
+                port:
+                  number: 80
+          
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: autoselect-frontend-svc
+                port:
+                  number: 80

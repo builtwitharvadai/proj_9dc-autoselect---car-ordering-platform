@@ -14,6 +14,9 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from src.api.v1.auth import router as auth_router
 from src.api.v1.cart import router as cart_router
@@ -33,11 +36,15 @@ from src.core.logging import (
     log_performance,
     set_request_id,
 )
+from src.core.security import get_csp_headers
 from src.database.connection import get_db_session
 
 # Configure logging before application initialization
 configure_logging()
 logger = get_logger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def cleanup_expired_carts():
@@ -190,6 +197,10 @@ app = FastAPI(
     debug=settings.debug,
 )
 
+# Configure rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -199,6 +210,31 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """
+    Middleware for adding security headers to responses.
+
+    Adds CSP, X-Content-Type-Options, X-Frame-Options, and other
+    security headers based on environment configuration.
+
+    Args:
+        request: Incoming HTTP request
+        call_next: Next middleware or route handler
+
+    Returns:
+        HTTP response with security headers
+    """
+    response = await call_next(request)
+    
+    # Add security headers
+    security_headers = get_csp_headers()
+    for header, value in security_headers.items():
+        response.headers[header] = value
+    
+    return response
 
 
 @app.middleware("http")
@@ -347,6 +383,7 @@ async def health_check() -> dict[str, str]:
         "status": "healthy",
         "service": settings.app_name,
         "version": settings.app_version,
+        "environment": settings.environment,
     }
 
 
@@ -369,6 +406,8 @@ async def readiness_check() -> dict[str, str | bool]:
     """
     # Check database connectivity
     dependencies_ready = True
+    db_status = "healthy"
+    
     try:
         async with get_db_session() as session:
             await session.execute("SELECT 1")
@@ -379,6 +418,7 @@ async def readiness_check() -> dict[str, str | bool]:
             error_type=type(e).__name__,
         )
         dependencies_ready = False
+        db_status = "unhealthy"
 
     if not dependencies_ready:
         logger.warning("Readiness check failed", dependencies_ready=False)
@@ -388,6 +428,7 @@ async def readiness_check() -> dict[str, str | bool]:
                 "status": "not_ready",
                 "service": settings.app_name,
                 "dependencies_ready": False,
+                "database": db_status,
             },
         )
 
@@ -395,7 +436,33 @@ async def readiness_check() -> dict[str, str | bool]:
         "status": "ready",
         "service": settings.app_name,
         "version": settings.app_version,
+        "environment": settings.environment,
         "dependencies_ready": dependencies_ready,
+        "database": db_status,
+    }
+
+
+@app.get(
+    "/live",
+    status_code=status.HTTP_200_OK,
+    tags=["Health"],
+    summary="Liveness check endpoint",
+    response_description="Application liveness status",
+)
+async def liveness_check() -> dict[str, str]:
+    """
+    Liveness check endpoint for Kubernetes.
+
+    Indicates whether the application is alive and should not be restarted.
+    Returns 200 OK if application is running.
+
+    Returns:
+        Dictionary with liveness status
+    """
+    return {
+        "status": "alive",
+        "service": settings.app_name,
+        "version": settings.app_version,
     }
 
 

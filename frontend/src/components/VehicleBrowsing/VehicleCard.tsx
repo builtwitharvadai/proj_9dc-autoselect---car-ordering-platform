@@ -8,6 +8,7 @@
 
 import { memo } from 'react';
 import type { Vehicle } from '../../types/vehicle';
+import { useComparison } from '../../hooks/useComparison';
 
 /**
  * Props for VehicleCard component
@@ -101,6 +102,17 @@ function VehicleCard({
     ? Math.round(((vehicle.msrp - vehicle.price) / vehicle.msrp) * 100)
     : 0;
 
+  const {
+    toggleVehicle,
+    isVehicleInComparison,
+    canAddMore,
+    count,
+    maxVehicles,
+  } = useComparison();
+
+  const isInComparison = isVehicleInComparison(vehicle.id);
+  const canToggleComparison = isInComparison || canAddMore;
+
   const handleViewDetails = (): void => {
     if (onViewDetails) {
       onViewDetails(vehicle.id);
@@ -110,6 +122,12 @@ function VehicleCard({
   const handleAddToCart = (): void => {
     if (onAddToCart && isAvailable) {
       onAddToCart(vehicle.id);
+    }
+  };
+
+  const handleToggleComparison = (): void => {
+    if (canToggleComparison) {
+      toggleVehicle(vehicle);
     }
   };
 
@@ -124,6 +142,13 @@ function VehicleCard({
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handleAddToCart();
+    }
+  };
+
+  const handleKeyDownToggleComparison = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleToggleComparison();
     }
   };
 
@@ -157,6 +182,27 @@ function VehicleCard({
           <div className="absolute top-3 left-3">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
               {discountPercentage}% OFF
+            </span>
+          </div>
+        )}
+
+        {/* Comparison Badge */}
+        {isInComparison && (
+          <div className="absolute bottom-3 left-3">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-600 text-white">
+              <svg
+                className="w-3 h-3 mr-1"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              In Comparison
             </span>
           </div>
         )}
@@ -250,6 +296,15 @@ function VehicleCard({
           </div>
         )}
 
+        {/* Comparison Count Indicator */}
+        {count > 0 && (
+          <div className="mb-4 p-2 bg-blue-50 rounded-md border border-blue-200">
+            <p className="text-xs text-blue-800 text-center">
+              {count} of {maxVehicles} vehicles selected for comparison
+            </p>
+          </div>
+        )}
+
         {/* Pricing */}
         <div className="mt-auto pt-4 border-t border-gray-200">
           <div className="flex items-baseline justify-between mb-3">
@@ -266,35 +321,98 @@ function VehicleCard({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleViewDetails}
+                onKeyDown={handleKeyDownViewDetails}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                aria-label={`View details for ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+              >
+                View Details
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                onKeyDown={handleKeyDownAddToCart}
+                disabled={!isAvailable}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200 ${
+                  isAvailable
+                    ? 'text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                    : 'text-gray-400 bg-gray-200 cursor-not-allowed'
+                }`}
+                aria-label={
+                  isAvailable
+                    ? `Add ${vehicle.year} ${vehicle.make} ${vehicle.model} to cart`
+                    : `${vehicle.year} ${vehicle.make} ${vehicle.model} is not available`
+                }
+                aria-disabled={!isAvailable}
+              >
+                {isAvailable ? 'Add to Cart' : 'Unavailable'}
+              </button>
+            </div>
+
+            {/* Add to Compare Button */}
             <button
               type="button"
-              onClick={handleViewDetails}
-              onKeyDown={handleKeyDownViewDetails}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              aria-label={`View details for ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-            >
-              View Details
-            </button>
-            
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              onKeyDown={handleKeyDownAddToCart}
-              disabled={!isAvailable}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200 ${
-                isAvailable
-                  ? 'text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-                  : 'text-gray-400 bg-gray-200 cursor-not-allowed'
+              onClick={handleToggleComparison}
+              onKeyDown={handleKeyDownToggleComparison}
+              disabled={!canToggleComparison}
+              className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200 ${
+                isInComparison
+                  ? 'text-blue-700 bg-blue-50 border border-blue-300 hover:bg-blue-100 focus:ring-blue-500'
+                  : canAddMore
+                    ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-blue-500'
+                    : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed'
               }`}
               aria-label={
-                isAvailable
-                  ? `Add ${vehicle.year} ${vehicle.make} ${vehicle.model} to cart`
-                  : `${vehicle.year} ${vehicle.make} ${vehicle.model} is not available`
+                isInComparison
+                  ? `Remove ${vehicle.year} ${vehicle.make} ${vehicle.model} from comparison`
+                  : canAddMore
+                    ? `Add ${vehicle.year} ${vehicle.make} ${vehicle.model} to comparison`
+                    : 'Maximum vehicles selected for comparison'
               }
-              aria-disabled={!isAvailable}
+              aria-disabled={!canToggleComparison}
             >
-              {isAvailable ? 'Add to Cart' : 'Unavailable'}
+              <span className="flex items-center justify-center">
+                {isInComparison ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 mr-1.5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    In Comparison
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-4 h-4 mr-1.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    Add to Compare
+                  </>
+                )}
+              </span>
             </button>
           </div>
         </div>

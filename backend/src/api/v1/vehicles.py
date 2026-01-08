@@ -10,7 +10,7 @@ logging and security.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import DatabaseSession, OptionalUser
@@ -29,6 +29,7 @@ from src.schemas.vehicles import (
     VehicleSearchRequest as VehicleSearchRequestLegacy,
     VehicleUpdate,
 )
+from src.services.cache.vehicle_cache import VehicleCache, get_vehicle_cache
 from src.services.search.elasticsearch_client import (
     ElasticsearchClient,
     get_elasticsearch_client,
@@ -93,7 +94,9 @@ async def get_search_service(
     description="Retrieve paginated list of vehicles with optional filtering",
 )
 async def list_vehicles(
+    response: Response,
     service: Annotated[VehicleService, Depends(get_vehicle_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[
@@ -116,7 +119,9 @@ async def list_vehicles(
     List vehicles with pagination and filtering.
 
     Args:
+        response: FastAPI response object for headers
         service: Vehicle service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
         page: Page number (1-indexed)
         page_size: Number of items per page
@@ -138,6 +143,33 @@ async def list_vehicles(
         HTTPException: 400 for validation errors, 500 for server errors
     """
     try:
+        filters = {
+            "make": make,
+            "model": model,
+            "year_min": year_min,
+            "year_max": year_max,
+            "body_style": body_style,
+            "fuel_type": fuel_type,
+            "price_min": price_min,
+            "price_max": price_max,
+            "page": page,
+            "page_size": page_size,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+        }
+
+        cached_result = await vehicle_cache.get_vehicle_list(filters)
+        if cached_result is not None:
+            response.headers["X-Cache"] = "HIT"
+            response.headers["Cache-Control"] = "public, max-age=3600"
+            logger.info(
+                "Vehicle list served from cache",
+                page=page,
+                page_size=page_size,
+                user_id=str(current_user.id) if current_user else None,
+            )
+            return cached_result
+
         search_request = VehicleSearchRequestLegacy(
             make=make,
             model=model,
@@ -154,6 +186,11 @@ async def list_vehicles(
         )
 
         result = await service.search_vehicles(search_request)
+
+        await vehicle_cache.set_vehicle_list(result, filters)
+
+        response.headers["X-Cache"] = "MISS"
+        response.headers["Cache-Control"] = "public, max-age=3600"
 
         logger.info(
             "Vehicles listed successfully",
@@ -209,16 +246,20 @@ async def list_vehicles(
     description="Search vehicles with full-text search, filters, facets, and fuzzy matching",
 )
 async def search_vehicles(
+    response: Response,
     search_request: VehicleSearchRequest,
     search_service: Annotated[VehicleSearchService, Depends(get_search_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
 ) -> SearchResponse:
     """
     Advanced vehicle search with Elasticsearch.
 
     Args:
+        response: FastAPI response object for headers
         search_request: Search request with query, filters, and pagination
         search_service: Vehicle search service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
 
     Returns:
@@ -228,7 +269,27 @@ async def search_vehicles(
         HTTPException: 400 for invalid queries, 500 for search errors
     """
     try:
-        # Execute faceted search if facets are requested
+        filters = {
+            "query": search_request.query,
+            "page": search_request.page,
+            "limit": search_request.limit,
+            "include_facets": search_request.include_facets,
+        }
+
+        if search_request.query:
+            cached_results = await vehicle_cache.get_search_results(
+                search_request.query, filters
+            )
+            if cached_results is not None:
+                response.headers["X-Cache"] = "HIT"
+                response.headers["Cache-Control"] = "public, max-age=1800"
+                logger.info(
+                    "Search results served from cache",
+                    query=search_request.query,
+                    user_id=str(current_user.id) if current_user else None,
+                )
+                return SearchResponse(**cached_results)
+
         if search_request.include_facets:
             result = await search_service.faceted_search(search_request)
             
@@ -241,7 +302,7 @@ async def search_vehicles(
                 user_id=str(current_user.id) if current_user else None,
             )
             
-            return SearchResponse(
+            search_response = SearchResponse(
                 results=result["results"].items,
                 facets=result.get("facets"),
                 metadata={
@@ -255,33 +316,44 @@ async def search_vehicles(
                 },
                 suggestions=[],
             )
-        
-        # Execute standard search
-        result = await search_service.search(search_request)
-        
-        logger.info(
-            "Search completed successfully",
-            total_results=result.total,
-            page=search_request.page,
-            limit=search_request.limit,
-            has_query=search_request.query is not None,
-            user_id=str(current_user.id) if current_user else None,
-        )
-        
-        return SearchResponse(
-            results=result.items,
-            facets=None,
-            metadata={
-                "query": search_request.query,
-                "total_results": result.total,
-                "page": search_request.page,
-                "limit": search_request.limit,
-                "total_pages": result.total_pages,
-                "took_ms": 0,
-                "timed_out": False,
-            },
-            suggestions=[],
-        )
+        else:
+            result = await search_service.search(search_request)
+            
+            logger.info(
+                "Search completed successfully",
+                total_results=result.total,
+                page=search_request.page,
+                limit=search_request.limit,
+                has_query=search_request.query is not None,
+                user_id=str(current_user.id) if current_user else None,
+            )
+            
+            search_response = SearchResponse(
+                results=result.items,
+                facets=None,
+                metadata={
+                    "query": search_request.query,
+                    "total_results": result.total,
+                    "page": search_request.page,
+                    "limit": search_request.limit,
+                    "total_pages": result.total_pages,
+                    "took_ms": 0,
+                    "timed_out": False,
+                },
+                suggestions=[],
+            )
+
+        if search_request.query:
+            await vehicle_cache.set_search_results(
+                search_request.query,
+                search_response.model_dump(mode="json"),
+                filters,
+            )
+
+        response.headers["X-Cache"] = "MISS"
+        response.headers["Cache-Control"] = "public, max-age=1800"
+
+        return search_response
 
     except SearchQueryError as e:
         logger.warning(
@@ -343,6 +415,7 @@ async def search_vehicles(
     description="Retrieve search suggestions for make, model, or body style",
 )
 async def get_search_suggestions(
+    response: Response,
     query: Annotated[str, Query(min_length=2, max_length=100, description="Search prefix")],
     field: Annotated[
         str,
@@ -356,6 +429,7 @@ async def get_search_suggestions(
     Get search suggestions for autocomplete.
 
     Args:
+        response: FastAPI response object for headers
         query: Search prefix (minimum 2 characters)
         field: Field to get suggestions for (make, model, or body_style)
         limit: Maximum number of suggestions to return
@@ -371,8 +445,9 @@ async def get_search_suggestions(
     try:
         suggestions = await search_service.suggest(prefix=query, field=field)
         
-        # Limit results
         suggestions = suggestions[:limit]
+        
+        response.headers["Cache-Control"] = "public, max-age=1800"
         
         logger.info(
             "Search suggestions retrieved",
@@ -442,8 +517,10 @@ async def get_search_suggestions(
     description="Retrieve detailed information about a specific vehicle",
 )
 async def get_vehicle(
+    response: Response,
     vehicle_id: UUID,
     service: Annotated[VehicleService, Depends(get_vehicle_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
     include_inventory: Annotated[
         bool, Query(description="Include inventory information")
@@ -453,8 +530,10 @@ async def get_vehicle(
     Get vehicle details by ID.
 
     Args:
+        response: FastAPI response object for headers
         vehicle_id: Vehicle unique identifier
         service: Vehicle service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
         include_inventory: Whether to include inventory data
 
@@ -465,10 +544,28 @@ async def get_vehicle(
         HTTPException: 404 if not found, 500 for server errors
     """
     try:
+        cached_vehicle = await vehicle_cache.get_vehicle_detail(vehicle_id)
+        if cached_vehicle is not None:
+            response.headers["X-Cache"] = "HIT"
+            response.headers["Cache-Control"] = "public, max-age=86400"
+            response.headers["ETag"] = f'"{vehicle_id}-{hash(cached_vehicle.model_dump_json())}"'
+            logger.info(
+                "Vehicle detail served from cache",
+                vehicle_id=str(vehicle_id),
+                user_id=str(current_user.id) if current_user else None,
+            )
+            return cached_vehicle
+
         result = await service.get_vehicle(
             vehicle_id=vehicle_id,
             include_inventory=include_inventory,
         )
+
+        await vehicle_cache.set_vehicle_detail(vehicle_id, result)
+
+        response.headers["X-Cache"] = "MISS"
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        response.headers["ETag"] = f'"{vehicle_id}-{hash(result.model_dump_json())}"'
 
         logger.info(
             "Vehicle retrieved successfully",
@@ -524,6 +621,7 @@ async def get_vehicle(
 async def create_vehicle(
     vehicle_data: VehicleCreate,
     service: Annotated[VehicleService, Depends(get_vehicle_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
 ) -> VehicleResponse:
     """
@@ -532,6 +630,7 @@ async def create_vehicle(
     Args:
         vehicle_data: Vehicle creation data
         service: Vehicle service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
 
     Returns:
@@ -542,6 +641,9 @@ async def create_vehicle(
     """
     try:
         result = await service.create_vehicle(vehicle_data)
+
+        await vehicle_cache.invalidate_vehicle_lists()
+        await vehicle_cache.invalidate_search_results()
 
         logger.info(
             "Vehicle created successfully",
@@ -601,6 +703,7 @@ async def update_vehicle(
     vehicle_id: UUID,
     vehicle_data: VehicleUpdate,
     service: Annotated[VehicleService, Depends(get_vehicle_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
 ) -> VehicleResponse:
     """
@@ -610,6 +713,7 @@ async def update_vehicle(
         vehicle_id: Vehicle unique identifier
         vehicle_data: Vehicle update data
         service: Vehicle service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
 
     Returns:
@@ -623,6 +727,10 @@ async def update_vehicle(
             vehicle_id=vehicle_id,
             vehicle_data=vehicle_data,
         )
+
+        await vehicle_cache.invalidate_vehicle(vehicle_id)
+        await vehicle_cache.invalidate_vehicle_lists()
+        await vehicle_cache.invalidate_search_results()
 
         logger.info(
             "Vehicle updated successfully",
@@ -689,6 +797,7 @@ async def update_vehicle(
 async def delete_vehicle(
     vehicle_id: UUID,
     service: Annotated[VehicleService, Depends(get_vehicle_service)],
+    vehicle_cache: Annotated[VehicleCache, Depends(get_vehicle_cache)],
     current_user: OptionalUser,
     soft: Annotated[
         bool, Query(description="Perform soft delete")
@@ -700,6 +809,7 @@ async def delete_vehicle(
     Args:
         vehicle_id: Vehicle unique identifier
         service: Vehicle service instance
+        vehicle_cache: Vehicle cache service instance
         current_user: Optional authenticated user
         soft: If True, perform soft delete; otherwise hard delete
 
@@ -708,6 +818,10 @@ async def delete_vehicle(
     """
     try:
         await service.delete_vehicle(vehicle_id=vehicle_id, soft=soft)
+
+        await vehicle_cache.invalidate_vehicle(vehicle_id)
+        await vehicle_cache.invalidate_vehicle_lists()
+        await vehicle_cache.invalidate_search_results()
 
         logger.info(
             "Vehicle deleted successfully",

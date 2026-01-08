@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from src.core.logging import get_logger
 from src.cache.redis_client import RedisClient, CacheKeyManager
+from src.services.cache.vehicle_cache import VehicleCache
 from src.database.models.vehicle import Vehicle
 from src.database.models.inventory import InventoryItem, InventoryStatus
 from src.services.vehicles.repository import VehicleRepository
@@ -78,6 +79,7 @@ class VehicleService:
         cache_client: Optional[RedisClient] = None,
         cache_ttl: int = 3600,
         search_service: Optional[Any] = None,
+        vehicle_cache: Optional[VehicleCache] = None,
     ):
         """
         Initialize vehicle service.
@@ -87,6 +89,7 @@ class VehicleService:
             cache_client: Optional Redis cache client
             cache_ttl: Cache TTL in seconds (default: 1 hour)
             search_service: Optional Elasticsearch search service
+            vehicle_cache: Optional vehicle cache service
         """
         self.repository = VehicleRepository(session)
         self.session = session
@@ -94,12 +97,14 @@ class VehicleService:
         self.cache_ttl = cache_ttl
         self.cache_key_manager = CacheKeyManager()
         self.search_service = search_service
+        self.vehicle_cache = vehicle_cache
 
         logger.info(
             "Vehicle service initialized",
             cache_enabled=cache_client is not None,
             cache_ttl=cache_ttl,
             search_enabled=search_service is not None,
+            vehicle_cache_enabled=vehicle_cache is not None,
         )
 
     async def create_vehicle(self, vehicle_data: VehicleCreate) -> VehicleResponse:
@@ -143,10 +148,12 @@ class VehicleService:
             created_vehicle = await self.repository.create(vehicle)
             await self.session.commit()
 
-            if self.cache_client:
-                await self._invalidate_list_cache()
-
             response = self._to_response(created_vehicle)
+
+            if self.vehicle_cache:
+                await self.vehicle_cache.invalidate_vehicle_lists()
+            elif self.cache_client:
+                await self._invalidate_list_cache()
 
             if self.search_service:
                 await self._sync_to_search_index(response)
@@ -215,9 +222,17 @@ class VehicleService:
             VehicleServiceError: If retrieval fails
         """
         try:
-            cache_key = self.cache_key_manager.vehicle_key(str(vehicle_id))
+            if self.vehicle_cache and not include_inventory:
+                cached_vehicle = await self.vehicle_cache.get_vehicle_detail(vehicle_id)
+                if cached_vehicle:
+                    logger.debug(
+                        "Vehicle retrieved from cache",
+                        vehicle_id=str(vehicle_id),
+                    )
+                    return cached_vehicle
 
-            if self.cache_client and not include_inventory:
+            if self.cache_client and not include_inventory and not self.vehicle_cache:
+                cache_key = self.cache_key_manager.vehicle_key(str(vehicle_id))
                 cached_data = await self.cache_client.get(cache_key)
                 if cached_data:
                     logger.debug(
@@ -236,7 +251,10 @@ class VehicleService:
 
             response = self._to_response(vehicle)
 
-            if self.cache_client and not include_inventory:
+            if self.vehicle_cache and not include_inventory:
+                await self.vehicle_cache.set_vehicle_detail(vehicle_id, response)
+            elif self.cache_client and not include_inventory:
+                cache_key = self.cache_key_manager.vehicle_key(str(vehicle_id))
                 await self.cache_client.set(
                     cache_key,
                     response.model_dump_json(),
@@ -317,11 +335,14 @@ class VehicleService:
             updated_vehicle = await self.repository.update(vehicle)
             await self.session.commit()
 
-            if self.cache_client:
+            response = self._to_response(updated_vehicle)
+
+            if self.vehicle_cache:
+                await self.vehicle_cache.invalidate_vehicle(vehicle_id)
+                await self.vehicle_cache.invalidate_vehicle_lists()
+            elif self.cache_client:
                 await self._invalidate_vehicle_cache(vehicle_id)
                 await self._invalidate_list_cache()
-
-            response = self._to_response(updated_vehicle)
 
             if self.search_service:
                 await self._sync_to_search_index(response)
@@ -389,7 +410,10 @@ class VehicleService:
 
             await self.session.commit()
 
-            if self.cache_client:
+            if self.vehicle_cache:
+                await self.vehicle_cache.invalidate_vehicle(vehicle_id)
+                await self.vehicle_cache.invalidate_vehicle_lists()
+            elif self.cache_client:
                 await self._invalidate_vehicle_cache(vehicle_id)
                 await self._invalidate_list_cache()
 
@@ -449,9 +473,18 @@ class VehicleService:
             VehicleServiceError: If search fails
         """
         try:
-            cache_key = self._generate_search_cache_key(search_request)
+            if self.vehicle_cache:
+                filters = search_request.model_dump(exclude_unset=True)
+                cached_results = await self.vehicle_cache.get_vehicle_list(filters)
+                if cached_results:
+                    logger.debug(
+                        "Search results retrieved from cache",
+                        filters=filters,
+                    )
+                    return cached_results
 
-            if self.cache_client:
+            if self.cache_client and not self.vehicle_cache:
+                cache_key = self._generate_search_cache_key(search_request)
                 cached_data = await self.cache_client.get(cache_key)
                 if cached_data:
                     logger.debug(
@@ -494,7 +527,11 @@ class VehicleService:
                 total_pages=total_pages,
             )
 
-            if self.cache_client:
+            if self.vehicle_cache:
+                filters = search_request.model_dump(exclude_unset=True)
+                await self.vehicle_cache.set_vehicle_list(response, filters)
+            elif self.cache_client:
+                cache_key = self._generate_search_cache_key(search_request)
                 await self.cache_client.set(
                     cache_key,
                     response.model_dump_json(),
@@ -751,6 +788,70 @@ class VehicleService:
             raise VehicleServiceError(
                 "Failed to bulk index vehicles",
                 code="VEHICLE_BULK_INDEX_ERROR",
+                error=str(e),
+            ) from e
+
+    async def warm_popular_vehicles(
+        self,
+        vehicle_ids: list[uuid.UUID],
+    ) -> int:
+        """
+        Warm cache with popular vehicle data.
+
+        Args:
+            vehicle_ids: List of vehicle UUIDs to warm
+
+        Returns:
+            Number of vehicles successfully cached
+
+        Raises:
+            VehicleServiceError: If cache warming fails
+        """
+        if not self.vehicle_cache:
+            logger.warning("Vehicle cache not configured, skipping cache warming")
+            return 0
+
+        try:
+            vehicle_data = []
+            for vehicle_id in vehicle_ids:
+                try:
+                    vehicle = await self.repository.get_by_id(vehicle_id)
+                    if vehicle:
+                        response = self._to_response(vehicle)
+                        vehicle_data.append(response)
+                except Exception as e:
+                    logger.error(
+                        "Failed to retrieve vehicle for cache warming",
+                        vehicle_id=str(vehicle_id),
+                        error=str(e),
+                    )
+
+            if vehicle_data:
+                warmed_ids = [v.id for v in vehicle_data]
+                count = await self.vehicle_cache.warm_cache_for_vehicles(
+                    warmed_ids,
+                    vehicle_data,
+                )
+
+                logger.info(
+                    "Cache warmed for popular vehicles",
+                    count=count,
+                    requested=len(vehicle_ids),
+                )
+
+                return count
+
+            return 0
+
+        except Exception as e:
+            logger.error(
+                "Failed to warm cache for popular vehicles",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise VehicleServiceError(
+                "Failed to warm vehicle cache",
+                code="VEHICLE_CACHE_WARM_ERROR",
                 error=str(e),
             ) from e
 

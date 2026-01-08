@@ -7,6 +7,7 @@ utilities. Supports async operations for high-performance caching.
 """
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Optional, Union
 
@@ -65,6 +66,11 @@ class RedisClient:
         self._pool: Optional[ConnectionPool] = None
         self._client: Optional[Redis] = None
         self._is_connected = False
+
+        # Performance monitoring
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._total_operations = 0
 
         logger.info(
             "Redis client initialized",
@@ -239,7 +245,14 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             value = await self._client.get(key)
+            
+            if value is not None:
+                self._cache_hits += 1
+            else:
+                self._cache_misses += 1
+            
             logger.debug("Redis GET operation", key=key, found=value is not None)
             return value
 
@@ -277,6 +290,7 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             result = await self._client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
             logger.debug(
                 "Redis SET operation",
@@ -310,6 +324,7 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             count = await self._client.delete(*keys)
             logger.debug("Redis DELETE operation", keys=keys, count=count)
             return count
@@ -335,6 +350,7 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             count = await self._client.exists(*keys)
             logger.debug("Redis EXISTS operation", keys=keys, count=count)
             return count
@@ -412,6 +428,7 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             value = await self._client.incrby(key, amount)
             logger.debug("Redis INCR operation", key=key, amount=amount, new_value=value)
             return value
@@ -438,6 +455,7 @@ class RedisClient:
         self._ensure_connected()
 
         try:
+            self._total_operations += 1
             value = await self._client.decrby(key, amount)
             logger.debug("Redis DECR operation", key=key, amount=amount, new_value=value)
             return value
@@ -472,6 +490,193 @@ class RedisClient:
 
         finally:
             await pipe.reset()
+
+    async def get_json(self, key: str) -> Optional[dict[str, Any]]:
+        """
+        Get JSON value from Redis by key.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Deserialized JSON value or None if key doesn't exist
+
+        Raises:
+            ConnectionError: If Redis is not connected
+            RedisError: If Redis operation fails
+            json.JSONDecodeError: If value is not valid JSON
+        """
+        value = await self.get(key)
+        if value is None:
+            return None
+        
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as e:
+            logger.error("Failed to decode JSON from cache", key=key, error=str(e))
+            raise
+
+    async def set_json(
+        self,
+        key: str,
+        value: dict[str, Any],
+        ex: Optional[int] = None,
+        px: Optional[int] = None,
+    ) -> bool:
+        """
+        Set JSON value in Redis with optional expiration.
+
+        Args:
+            key: Cache key
+            value: Dictionary to cache as JSON
+            ex: Expiration time in seconds
+            px: Expiration time in milliseconds
+
+        Returns:
+            True if operation succeeded, False otherwise
+
+        Raises:
+            ConnectionError: If Redis is not connected
+            RedisError: If Redis operation fails
+            TypeError: If value is not JSON serializable
+        """
+        try:
+            json_value = json.dumps(value)
+            return await self.set(key, json_value, ex=ex, px=px)
+        except (TypeError, ValueError) as e:
+            logger.error("Failed to serialize value to JSON", key=key, error=str(e))
+            raise
+
+    async def get_many(self, *keys: str) -> dict[str, Optional[str]]:
+        """
+        Get multiple values from Redis by keys.
+
+        Args:
+            *keys: Cache keys to retrieve
+
+        Returns:
+            Dictionary mapping keys to their values (None if key doesn't exist)
+
+        Raises:
+            ConnectionError: If Redis is not connected
+            RedisError: If Redis operation fails
+        """
+        self._ensure_connected()
+
+        try:
+            self._total_operations += len(keys)
+            values = await self._client.mget(*keys)
+            
+            result = dict(zip(keys, values))
+            hits = sum(1 for v in values if v is not None)
+            self._cache_hits += hits
+            self._cache_misses += len(keys) - hits
+            
+            logger.debug("Redis MGET operation", keys=keys, found=hits)
+            return result
+
+        except RedisError as e:
+            logger.error("Redis MGET operation failed", keys=keys, error=str(e))
+            raise
+
+    async def set_many(
+        self,
+        mapping: dict[str, Union[str, bytes, int, float]],
+        ex: Optional[int] = None,
+    ) -> bool:
+        """
+        Set multiple key-value pairs in Redis.
+
+        Args:
+            mapping: Dictionary of key-value pairs to set
+            ex: Expiration time in seconds (applied to all keys)
+
+        Returns:
+            True if all operations succeeded
+
+        Raises:
+            ConnectionError: If Redis is not connected
+            RedisError: If Redis operation fails
+        """
+        self._ensure_connected()
+
+        try:
+            self._total_operations += len(mapping)
+            
+            if ex is None:
+                result = await self._client.mset(mapping)
+                logger.debug("Redis MSET operation", count=len(mapping))
+                return result
+            else:
+                async with self.pipeline() as pipe:
+                    for key, value in mapping.items():
+                        pipe.set(key, value, ex=ex)
+                logger.debug("Redis MSET with expiration", count=len(mapping), ex=ex)
+                return True
+
+        except RedisError as e:
+            logger.error("Redis MSET operation failed", error=str(e))
+            raise
+
+    async def delete_pattern(self, pattern: str) -> int:
+        """
+        Delete all keys matching a pattern.
+
+        Args:
+            pattern: Redis key pattern (e.g., "vehicle:*")
+
+        Returns:
+            Number of keys deleted
+
+        Raises:
+            ConnectionError: If Redis is not connected
+            RedisError: If Redis operation fails
+        """
+        self._ensure_connected()
+
+        try:
+            keys = []
+            async for key in self._client.scan_iter(match=pattern):
+                keys.append(key)
+            
+            if not keys:
+                logger.debug("Redis DELETE pattern - no keys found", pattern=pattern)
+                return 0
+            
+            count = await self.delete(*keys)
+            logger.debug("Redis DELETE pattern", pattern=pattern, count=count)
+            return count
+
+        except RedisError as e:
+            logger.error("Redis DELETE pattern failed", pattern=pattern, error=str(e))
+            raise
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """
+        Get cache performance statistics.
+
+        Returns:
+            Dictionary containing cache hit rate and operation counts
+        """
+        hit_rate = (
+            self._cache_hits / self._total_operations * 100
+            if self._total_operations > 0
+            else 0.0
+        )
+        
+        return {
+            "total_operations": self._total_operations,
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
+            "hit_rate_percent": round(hit_rate, 2),
+        }
+
+    def reset_cache_stats(self) -> None:
+        """Reset cache performance statistics."""
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._total_operations = 0
+        logger.info("Cache statistics reset")
 
 
 class CacheKeyManager:
@@ -517,6 +722,22 @@ class CacheKeyManager:
     def vehicle_key(self, vehicle_id: Union[str, int]) -> str:
         """Generate cache key for vehicle data."""
         return self.make_key("vehicle", vehicle_id)
+
+    def vehicle_list_key(self, filters: Optional[dict[str, Any]] = None) -> str:
+        """
+        Generate cache key for vehicle list queries.
+
+        Args:
+            filters: Optional filter parameters
+
+        Returns:
+            Cache key for vehicle list query
+        """
+        return self.list_key("vehicles", filters)
+
+    def vehicle_detail_key(self, vehicle_id: Union[str, int]) -> str:
+        """Generate cache key for vehicle detail data."""
+        return self.make_key("vehicle", vehicle_id, "detail")
 
     def order_key(self, order_id: Union[str, int]) -> str:
         """Generate cache key for order data."""

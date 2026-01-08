@@ -190,6 +190,27 @@ class Settings(BaseSettings):
         description="Enable Elasticsearch search functionality",
     )
 
+    # Stripe Payment Configuration
+    stripe_publishable_key: str = Field(
+        default="pk_test_default_key",
+        description="Stripe publishable API key for client-side integration",
+    )
+
+    stripe_secret_key: str = Field(
+        default="sk_test_default_key",
+        description="Stripe secret API key for server-side operations",
+    )
+
+    stripe_webhook_secret: str = Field(
+        default="whsec_default_secret",
+        description="Stripe webhook signing secret for event verification",
+    )
+
+    stripe_enabled: bool = Field(
+        default=True,
+        description="Enable Stripe payment processing functionality",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:
@@ -274,6 +295,88 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Elasticsearch URL must start with 'http://' or 'https://'"
             )
+        return v
+
+    @field_validator("stripe_publishable_key")
+    @classmethod
+    def validate_stripe_publishable_key(cls, v: str, info) -> str:
+        """
+        Validate Stripe publishable key format.
+
+        Args:
+            v: Stripe publishable key value
+            info: Validation info context
+
+        Returns:
+            Validated Stripe publishable key
+
+        Raises:
+            ValueError: If key format is invalid or default key used in production
+        """
+        environment = info.data.get("environment", "development")
+        if environment == "production" and v == "pk_test_default_key":
+            raise ValueError(
+                "Default Stripe publishable key cannot be used in production. "
+                "Set APP_STRIPE_PUBLISHABLE_KEY environment variable."
+            )
+        if not v.startswith(("pk_test_", "pk_live_")):
+            raise ValueError(
+                "Stripe publishable key must start with 'pk_test_' or 'pk_live_'"
+            )
+        return v
+
+    @field_validator("stripe_secret_key")
+    @classmethod
+    def validate_stripe_secret_key(cls, v: str, info) -> str:
+        """
+        Validate Stripe secret key format.
+
+        Args:
+            v: Stripe secret key value
+            info: Validation info context
+
+        Returns:
+            Validated Stripe secret key
+
+        Raises:
+            ValueError: If key format is invalid or default key used in production
+        """
+        environment = info.data.get("environment", "development")
+        if environment == "production" and v == "sk_test_default_key":
+            raise ValueError(
+                "Default Stripe secret key cannot be used in production. "
+                "Set APP_STRIPE_SECRET_KEY environment variable."
+            )
+        if not v.startswith(("sk_test_", "sk_live_")):
+            raise ValueError(
+                "Stripe secret key must start with 'sk_test_' or 'sk_live_'"
+            )
+        return v
+
+    @field_validator("stripe_webhook_secret")
+    @classmethod
+    def validate_stripe_webhook_secret(cls, v: str, info) -> str:
+        """
+        Validate Stripe webhook secret format.
+
+        Args:
+            v: Stripe webhook secret value
+            info: Validation info context
+
+        Returns:
+            Validated Stripe webhook secret
+
+        Raises:
+            ValueError: If secret format is invalid or default secret used in production
+        """
+        environment = info.data.get("environment", "development")
+        if environment == "production" and v == "whsec_default_secret":
+            raise ValueError(
+                "Default Stripe webhook secret cannot be used in production. "
+                "Set APP_STRIPE_WEBHOOK_SECRET environment variable."
+            )
+        if not v.startswith("whsec_"):
+            raise ValueError("Stripe webhook secret must start with 'whsec_'")
         return v
 
     @field_validator("cors_origins", mode="before")

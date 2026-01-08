@@ -20,6 +20,7 @@ from src.api.v1.cart import router as cart_router
 from src.api.v1.configuration import router as configuration_router
 from src.api.v1.dealer import router as dealer_router
 from src.api.v1.dealer_management import router as dealer_management_router
+from src.api.v1.orders import router as orders_router
 from src.api.v1.payments import router as payments_router
 from src.api.v1.recommendations import router as recommendations_router
 from src.api.v1.saved_configurations import router as saved_configurations_router
@@ -439,6 +440,13 @@ app.include_router(
     payments_router,
     prefix="/api/v1/payments",
     tags=["Payments"]
+)
+
+# Include orders router
+app.include_router(
+    orders_router,
+    prefix="/api/v1/orders",
+    tags=["Orders"]
 )
 
 # Service routers will be added here

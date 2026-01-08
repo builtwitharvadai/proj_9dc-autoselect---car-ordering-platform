@@ -13,6 +13,7 @@ from typing import Optional, Any
 
 from sqlalchemy import (
     String,
+    Integer,
     ForeignKey,
     Index,
     CheckConstraint,
@@ -86,6 +87,47 @@ class InventoryStatus(str, Enum):
         return self in (InventoryStatus.AVAILABLE, InventoryStatus.RESERVED)
 
 
+class AvailabilityStatus(str, Enum):
+    """
+    Availability status enumeration for catalog-specific tracking.
+
+    Attributes:
+        AVAILABLE: Vehicle in stock and available
+        LOW_STOCK: Limited quantity available
+        OUT_OF_STOCK: Currently out of stock
+        DISCONTINUED: No longer available for order
+    """
+
+    AVAILABLE = "available"
+    LOW_STOCK = "low_stock"
+    OUT_OF_STOCK = "out_of_stock"
+    DISCONTINUED = "discontinued"
+
+    @classmethod
+    def from_string(cls, value: str) -> "AvailabilityStatus":
+        """
+        Create AvailabilityStatus from string value.
+
+        Args:
+            value: String representation of status
+
+        Returns:
+            AvailabilityStatus enum value
+
+        Raises:
+            ValueError: If value is not a valid status
+        """
+        try:
+            return cls(value.lower())
+        except ValueError:
+            raise ValueError(f"Invalid availability status: {value}")
+
+    @property
+    def is_orderable(self) -> bool:
+        """Check if vehicle can be ordered."""
+        return self in (AvailabilityStatus.AVAILABLE, AvailabilityStatus.LOW_STOCK)
+
+
 class InventoryItem(AuditedModel):
     """
     Inventory model for tracking vehicle availability across dealerships.
@@ -100,6 +142,10 @@ class InventoryItem(AuditedModel):
         dealership_id: Dealership identifier (UUID)
         vin: Vehicle Identification Number
         status: Current inventory status (enum)
+        availability_status: Catalog availability status (enum)
+        stock_quantity: Current stock quantity
+        reserved_quantity: Quantity reserved for customers
+        low_stock_threshold: Threshold for low stock warning
         location: Physical location within dealership
         created_at: Record creation timestamp (from AuditedModel)
         updated_at: Last modification timestamp (from AuditedModel)
@@ -150,6 +196,37 @@ class InventoryItem(AuditedModel):
         default=InventoryStatus.AVAILABLE,
         index=True,
         comment="Current inventory status",
+    )
+
+    # Catalog-specific availability status
+    availability_status: Mapped[AvailabilityStatus] = mapped_column(
+        SQLEnum(AvailabilityStatus, name="availability_status", create_constraint=True),
+        nullable=False,
+        default=AvailabilityStatus.AVAILABLE,
+        index=True,
+        comment="Catalog availability status",
+    )
+
+    # Stock quantity tracking
+    stock_quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Current stock quantity",
+    )
+
+    reserved_quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Quantity reserved for customers",
+    )
+
+    low_stock_threshold: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=5,
+        comment="Threshold for low stock warning",
     )
 
     # Location information
@@ -212,6 +289,18 @@ class InventoryItem(AuditedModel):
             "status",
             "deleted_at",
         ),
+        # Index for availability status queries
+        Index(
+            "ix_inventory_availability_status",
+            "availability_status",
+            "dealership_id",
+        ),
+        # Index for stock quantity queries
+        Index(
+            "ix_inventory_stock_quantity",
+            "stock_quantity",
+            "availability_status",
+        ),
         # Check constraints for data validation
         CheckConstraint(
             "length(vin) = 17",
@@ -224,6 +313,22 @@ class InventoryItem(AuditedModel):
         CheckConstraint(
             "location IS NULL OR length(location) > 0",
             name="ck_inventory_location_not_empty",
+        ),
+        CheckConstraint(
+            "stock_quantity >= 0",
+            name="ck_inventory_stock_quantity_non_negative",
+        ),
+        CheckConstraint(
+            "reserved_quantity >= 0",
+            name="ck_inventory_reserved_quantity_non_negative",
+        ),
+        CheckConstraint(
+            "reserved_quantity <= stock_quantity",
+            name="ck_inventory_reserved_not_exceeds_stock",
+        ),
+        CheckConstraint(
+            "low_stock_threshold >= 0",
+            name="ck_inventory_low_stock_threshold_non_negative",
         ),
         {
             "comment": "Vehicle inventory tracking across dealerships",
@@ -240,7 +345,8 @@ class InventoryItem(AuditedModel):
         """
         return (
             f"<InventoryItem(id={self.id}, vin={self.vin}, "
-            f"dealership_id={self.dealership_id}, status={self.status.value})>"
+            f"dealership_id={self.dealership_id}, status={self.status.value}, "
+            f"stock_quantity={self.stock_quantity})>"
         )
 
     @property
@@ -254,6 +360,8 @@ class InventoryItem(AuditedModel):
         return (
             self.deleted_at is None
             and self.status.is_available_for_purchase
+            and self.availability_status.is_orderable
+            and self.available_quantity > 0
         )
 
     @property
@@ -284,7 +392,12 @@ class InventoryItem(AuditedModel):
         Returns:
             True if item can be reserved
         """
-        return self.deleted_at is None and self.status.can_reserve
+        return (
+            self.deleted_at is None
+            and self.status.can_reserve
+            and self.availability_status.is_orderable
+            and self.available_quantity > 0
+        )
 
     @property
     def can_be_sold(self) -> bool:
@@ -294,7 +407,45 @@ class InventoryItem(AuditedModel):
         Returns:
             True if item can be sold
         """
-        return self.deleted_at is None and self.status.can_sell
+        return (
+            self.deleted_at is None
+            and self.status.can_sell
+            and self.availability_status.is_orderable
+            and self.available_quantity > 0
+        )
+
+    @property
+    def available_quantity(self) -> int:
+        """
+        Get available quantity (stock minus reserved).
+
+        Returns:
+            Available quantity for purchase
+        """
+        return max(0, self.stock_quantity - self.reserved_quantity)
+
+    @property
+    def is_low_stock(self) -> bool:
+        """
+        Check if inventory is at low stock level.
+
+        Returns:
+            True if available quantity is at or below threshold
+        """
+        return (
+            self.available_quantity <= self.low_stock_threshold
+            and self.available_quantity > 0
+        )
+
+    @property
+    def is_out_of_stock(self) -> bool:
+        """
+        Check if inventory is out of stock.
+
+        Returns:
+            True if no available quantity
+        """
+        return self.available_quantity == 0
 
     @property
     def formatted_vin(self) -> str:
@@ -369,45 +520,125 @@ class InventoryItem(AuditedModel):
 
         return new_status in valid_transitions.get(self.status, set())
 
-    def reserve(self) -> None:
+    def update_availability_status(self) -> None:
+        """
+        Update availability status based on stock quantity.
+
+        Automatically sets availability status based on current stock levels.
+        """
+        if self.availability_status == AvailabilityStatus.DISCONTINUED:
+            return
+
+        if self.is_out_of_stock:
+            self.availability_status = AvailabilityStatus.OUT_OF_STOCK
+        elif self.is_low_stock:
+            self.availability_status = AvailabilityStatus.LOW_STOCK
+        else:
+            self.availability_status = AvailabilityStatus.AVAILABLE
+
+    def reserve(self, quantity: int = 1) -> None:
         """
         Reserve inventory item.
 
+        Args:
+            quantity: Quantity to reserve
+
         Raises:
-            ValueError: If item cannot be reserved
+            ValueError: If item cannot be reserved or insufficient quantity
         """
         if not self.can_be_reserved:
             raise ValueError(
                 f"Cannot reserve inventory item in status {self.status.value}"
             )
 
-        self.status = InventoryStatus.RESERVED
+        if quantity <= 0:
+            raise ValueError("Reservation quantity must be positive")
 
-    def mark_sold(self) -> None:
+        if quantity > self.available_quantity:
+            raise ValueError(
+                f"Insufficient quantity available. Requested: {quantity}, "
+                f"Available: {self.available_quantity}"
+            )
+
+        self.reserved_quantity += quantity
+        self.status = InventoryStatus.RESERVED
+        self.update_availability_status()
+
+    def mark_sold(self, quantity: int = 1) -> None:
         """
         Mark inventory item as sold.
 
+        Args:
+            quantity: Quantity sold
+
         Raises:
-            ValueError: If item cannot be sold
+            ValueError: If item cannot be sold or insufficient quantity
         """
         if not self.can_be_sold:
             raise ValueError(
                 f"Cannot sell inventory item in status {self.status.value}"
             )
 
-        self.status = InventoryStatus.SOLD
+        if quantity <= 0:
+            raise ValueError("Sold quantity must be positive")
 
-    def release_reservation(self) -> None:
+        if quantity > self.stock_quantity:
+            raise ValueError(
+                f"Insufficient stock quantity. Requested: {quantity}, "
+                f"Available: {self.stock_quantity}"
+            )
+
+        self.stock_quantity -= quantity
+        if self.reserved_quantity > 0:
+            self.reserved_quantity = max(0, self.reserved_quantity - quantity)
+
+        self.status = InventoryStatus.SOLD
+        self.update_availability_status()
+
+    def release_reservation(self, quantity: int = 1) -> None:
         """
         Release reservation and make item available.
 
+        Args:
+            quantity: Quantity to release
+
         Raises:
-            ValueError: If item is not reserved
+            ValueError: If item is not reserved or invalid quantity
         """
         if not self.is_reserved:
             raise ValueError("Cannot release reservation: item is not reserved")
 
-        self.status = InventoryStatus.AVAILABLE
+        if quantity <= 0:
+            raise ValueError("Release quantity must be positive")
+
+        if quantity > self.reserved_quantity:
+            raise ValueError(
+                f"Cannot release more than reserved. Requested: {quantity}, "
+                f"Reserved: {self.reserved_quantity}"
+            )
+
+        self.reserved_quantity -= quantity
+
+        if self.reserved_quantity == 0:
+            self.status = InventoryStatus.AVAILABLE
+
+        self.update_availability_status()
+
+    def add_stock(self, quantity: int) -> None:
+        """
+        Add stock quantity.
+
+        Args:
+            quantity: Quantity to add
+
+        Raises:
+            ValueError: If quantity is invalid
+        """
+        if quantity <= 0:
+            raise ValueError("Stock quantity to add must be positive")
+
+        self.stock_quantity += quantity
+        self.update_availability_status()
 
     def update_location(self, location: str) -> None:
         """
@@ -468,10 +699,17 @@ class InventoryItem(AuditedModel):
             "vin": self.vin,
             "formatted_vin": self.formatted_vin,
             "status": self.status.value,
+            "availability_status": self.availability_status.value,
+            "stock_quantity": self.stock_quantity,
+            "reserved_quantity": self.reserved_quantity,
+            "available_quantity": self.available_quantity,
+            "low_stock_threshold": self.low_stock_threshold,
             "location": self.location,
             "is_available": self.is_available,
             "is_reserved": self.is_reserved,
             "is_sold": self.is_sold,
+            "is_low_stock": self.is_low_stock,
+            "is_out_of_stock": self.is_out_of_stock,
             "can_be_reserved": self.can_be_reserved,
             "can_be_sold": self.can_be_sold,
             "created_at": self.created_at.isoformat() if self.created_at else None,

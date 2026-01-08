@@ -6,6 +6,7 @@ health check endpoints, global exception handling, and modular service routing.
 Includes startup and shutdown lifecycle events for resource management.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -15,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.v1.auth import router as auth_router
+from src.api.v1.cart import router as cart_router
 from src.api.v1.configuration import router as configuration_router
 from src.api.v1.dealer import router as dealer_router
 from src.api.v1.vehicles import router as vehicles_router
@@ -31,6 +33,54 @@ from src.database.connection import get_db_session
 # Configure logging before application initialization
 configure_logging()
 logger = get_logger(__name__)
+
+
+async def cleanup_expired_carts():
+    """
+    Background task to clean up expired carts and release reservations.
+
+    Runs periodically to remove expired anonymous carts and authenticated
+    user carts that exceed their expiration periods.
+    """
+    from src.services.cart.service import get_cart_service
+
+    while True:
+        try:
+            async with get_db_session() as session:
+                service = await get_cart_service(session)
+                await service.cleanup_expired_carts()
+                logger.info("Expired carts cleanup completed")
+        except Exception as e:
+            logger.error(
+                "Failed to cleanup expired carts",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+        await asyncio.sleep(300)  # Run every 5 minutes
+
+
+async def cleanup_expired_reservations():
+    """
+    Background task to clean up expired inventory reservations.
+
+    Runs periodically to release inventory reservations that have exceeded
+    their 15-minute TTL without being converted to orders.
+    """
+    from src.services.cart.inventory_reservation import InventoryReservationService
+
+    while True:
+        try:
+            async with get_db_session() as session:
+                service = InventoryReservationService(session)
+                await service.cleanup_expired_reservations()
+                logger.info("Expired reservations cleanup completed")
+        except Exception as e:
+            logger.error(
+                "Failed to cleanup expired reservations",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+        await asyncio.sleep(60)  # Run every minute
 
 
 @asynccontextmanager
@@ -61,11 +111,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Initialize resources here (database, cache, etc.)
         logger.info("Resources initialized successfully")
 
+    # Start background tasks
+    cart_cleanup_task = asyncio.create_task(cleanup_expired_carts())
+    reservation_cleanup_task = asyncio.create_task(cleanup_expired_reservations())
+    logger.info("Background tasks started for cart and reservation cleanup")
+
     yield
 
     # Shutdown
     logger.info("Application shutting down")
     with log_performance(logger, "application_shutdown"):
+        # Cancel background tasks
+        cart_cleanup_task.cancel()
+        reservation_cleanup_task.cancel()
+        try:
+            await cart_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await reservation_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Background tasks stopped")
         # Cleanup resources here
         logger.info("Resources cleaned up successfully")
 
@@ -303,6 +370,9 @@ app.include_router(dealer_router, prefix="/api/v1/dealer", tags=["Dealer"])
 
 # Include configuration router
 app.include_router(configuration_router, prefix="/api/v1", tags=["Configuration"])
+
+# Include cart router
+app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 
 # Service routers will be added here
 # Example:

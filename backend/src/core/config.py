@@ -211,6 +211,46 @@ class Settings(BaseSettings):
         description="Enable Stripe payment processing functionality",
     )
 
+    # AWS Configuration
+    aws_access_key_id: str = Field(
+        default="",
+        description="AWS access key ID for SES and SNS services",
+    )
+
+    aws_secret_access_key: str = Field(
+        default="",
+        description="AWS secret access key for SES and SNS services",
+    )
+
+    aws_region: str = Field(
+        default="us-east-1",
+        description="AWS region for SES and SNS services",
+    )
+
+    # AWS SES Configuration
+    ses_from_email: str = Field(
+        default="noreply@autoselect.com",
+        description="Default sender email address for SES notifications",
+    )
+
+    # AWS SNS Configuration
+    sns_enabled: bool = Field(
+        default=True,
+        description="Enable SNS SMS notifications",
+    )
+
+    # Celery Configuration
+    celery_broker_url: str = Field(
+        default="redis://redis:6379/1",
+        description="Celery broker URL for background task processing",
+    )
+
+    # Notification Configuration
+    notifications_enabled: bool = Field(
+        default=True,
+        description="Enable automated notification system",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:
@@ -377,6 +417,97 @@ class Settings(BaseSettings):
             )
         if not v.startswith("whsec_"):
             raise ValueError("Stripe webhook secret must start with 'whsec_'")
+        return v
+
+    @field_validator("celery_broker_url")
+    @classmethod
+    def validate_celery_broker_url(cls, v: str) -> str:
+        """
+        Validate Celery broker URL format.
+
+        Args:
+            v: Celery broker URL value
+
+        Returns:
+            Validated Celery broker URL
+
+        Raises:
+            ValueError: If Celery broker URL format is invalid
+        """
+        if not v.startswith(("redis://", "rediss://", "amqp://", "amqps://")):
+            raise ValueError(
+                "Celery broker URL must start with 'redis://', 'rediss://', "
+                "'amqp://', or 'amqps://'"
+            )
+        return v
+
+    @field_validator("ses_from_email")
+    @classmethod
+    def validate_ses_from_email(cls, v: str) -> str:
+        """
+        Validate SES from email format.
+
+        Args:
+            v: SES from email value
+
+        Returns:
+            Validated SES from email
+
+        Raises:
+            ValueError: If email format is invalid
+        """
+        if "@" not in v or "." not in v.split("@")[1]:
+            raise ValueError("SES from email must be a valid email address")
+        return v
+
+    @field_validator("aws_access_key_id")
+    @classmethod
+    def validate_aws_access_key_id(cls, v: str, info) -> str:
+        """
+        Validate AWS access key ID.
+
+        Args:
+            v: AWS access key ID value
+            info: Validation info context
+
+        Returns:
+            Validated AWS access key ID
+
+        Raises:
+            ValueError: If AWS access key ID is missing in production
+        """
+        environment = info.data.get("environment", "development")
+        notifications_enabled = info.data.get("notifications_enabled", True)
+        if environment == "production" and notifications_enabled and not v:
+            raise ValueError(
+                "AWS access key ID is required in production when notifications "
+                "are enabled. Set APP_AWS_ACCESS_KEY_ID environment variable."
+            )
+        return v
+
+    @field_validator("aws_secret_access_key")
+    @classmethod
+    def validate_aws_secret_access_key(cls, v: str, info) -> str:
+        """
+        Validate AWS secret access key.
+
+        Args:
+            v: AWS secret access key value
+            info: Validation info context
+
+        Returns:
+            Validated AWS secret access key
+
+        Raises:
+            ValueError: If AWS secret access key is missing in production
+        """
+        environment = info.data.get("environment", "development")
+        notifications_enabled = info.data.get("notifications_enabled", True)
+        if environment == "production" and notifications_enabled and not v:
+            raise ValueError(
+                "AWS secret access key is required in production when notifications "
+                "are enabled. Set APP_AWS_SECRET_ACCESS_KEY environment variable."
+            )
         return v
 
     @field_validator("cors_origins", mode="before")

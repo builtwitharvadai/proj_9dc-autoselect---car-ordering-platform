@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.v1.auth import router as auth_router
 from src.core.config import get_settings
 from src.core.logging import (
     clear_context,
@@ -22,6 +23,7 @@ from src.core.logging import (
     log_performance,
     set_request_id,
 )
+from src.database.connection import get_db_session
 
 # Configure logging before application initialization
 configure_logging()
@@ -255,8 +257,18 @@ async def readiness_check() -> dict[str, str | bool]:
     Returns:
         Dictionary with readiness status and dependency checks
     """
-    # Check dependencies here (database, cache, etc.)
+    # Check database connectivity
     dependencies_ready = True
+    try:
+        async with get_db_session() as session:
+            await session.execute("SELECT 1")
+    except Exception as e:
+        logger.warning(
+            "Database connectivity check failed",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        dependencies_ready = False
 
     if not dependencies_ready:
         logger.warning("Readiness check failed", dependencies_ready=False)
@@ -276,6 +288,9 @@ async def readiness_check() -> dict[str, str | bool]:
         "dependencies_ready": dependencies_ready,
     }
 
+
+# Include authentication router
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 
 # Service routers will be added here
 # Example:

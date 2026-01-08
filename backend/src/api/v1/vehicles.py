@@ -16,13 +16,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import DatabaseSession, OptionalUser
 from src.cache.redis_client import RedisClient, get_redis_client
 from src.core.logging import get_logger
+from src.schemas.search import (
+    SearchResponse,
+    SearchSuggestionRequest,
+    SearchSuggestionResponse,
+    VehicleSearchRequest,
+)
 from src.schemas.vehicles import (
     VehicleCreate,
     VehicleListResponse,
     VehicleResponse,
-    VehicleSearchRequest,
+    VehicleSearchRequest as VehicleSearchRequestLegacy,
     VehicleUpdate,
 )
+from src.services.search.elasticsearch_client import (
+    ElasticsearchClient,
+    get_elasticsearch_client,
+)
+from src.services.search.search_service import (
+    SearchError,
+    SearchExecutionError,
+    SearchQueryError,
+    VehicleSearchService,
+)
+from src.services.search.vehicle_index import VehicleIndex
 from src.services.vehicles.service import (
     VehicleNotFoundError,
     VehicleService,
@@ -50,6 +67,22 @@ async def get_vehicle_service(
         Initialized vehicle service
     """
     return VehicleService(session=db, cache_client=cache_client)
+
+
+async def get_search_service(
+    es_client: Annotated[ElasticsearchClient, Depends(get_elasticsearch_client)],
+) -> VehicleSearchService:
+    """
+    Dependency for vehicle search service initialization.
+
+    Args:
+        es_client: Elasticsearch client
+
+    Returns:
+        Initialized vehicle search service
+    """
+    vehicle_index = VehicleIndex(client=es_client)
+    return VehicleSearchService(client=es_client, index=vehicle_index)
 
 
 @router.get(
@@ -105,7 +138,7 @@ async def list_vehicles(
         HTTPException: 400 for validation errors, 500 for server errors
     """
     try:
-        search_request = VehicleSearchRequest(
+        search_request = VehicleSearchRequestLegacy(
             make=make,
             model=model,
             year_min=year_min,
@@ -161,6 +194,239 @@ async def list_vehicles(
             "Unexpected error listing vehicles",
             error=str(e),
             error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        ) from e
+
+
+@router.post(
+    "/search",
+    response_model=SearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Advanced vehicle search with Elasticsearch",
+    description="Search vehicles with full-text search, filters, facets, and fuzzy matching",
+)
+async def search_vehicles(
+    search_request: VehicleSearchRequest,
+    search_service: Annotated[VehicleSearchService, Depends(get_search_service)],
+    current_user: OptionalUser,
+) -> SearchResponse:
+    """
+    Advanced vehicle search with Elasticsearch.
+
+    Args:
+        search_request: Search request with query, filters, and pagination
+        search_service: Vehicle search service instance
+        current_user: Optional authenticated user
+
+    Returns:
+        Search results with vehicles, facets, and metadata
+
+    Raises:
+        HTTPException: 400 for invalid queries, 500 for search errors
+    """
+    try:
+        # Execute faceted search if facets are requested
+        if search_request.include_facets:
+            result = await search_service.faceted_search(search_request)
+            
+            logger.info(
+                "Faceted search completed successfully",
+                total_results=result["results"].total,
+                page=search_request.page,
+                limit=search_request.limit,
+                has_query=search_request.query is not None,
+                user_id=str(current_user.id) if current_user else None,
+            )
+            
+            return SearchResponse(
+                results=result["results"].items,
+                facets=result.get("facets"),
+                metadata={
+                    "query": search_request.query,
+                    "total_results": result["results"].total,
+                    "page": search_request.page,
+                    "limit": search_request.limit,
+                    "total_pages": result["results"].total_pages,
+                    "took_ms": 0,
+                    "timed_out": False,
+                },
+                suggestions=[],
+            )
+        
+        # Execute standard search
+        result = await search_service.search(search_request)
+        
+        logger.info(
+            "Search completed successfully",
+            total_results=result.total,
+            page=search_request.page,
+            limit=search_request.limit,
+            has_query=search_request.query is not None,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        
+        return SearchResponse(
+            results=result.items,
+            facets=None,
+            metadata={
+                "query": search_request.query,
+                "total_results": result.total,
+                "page": search_request.page,
+                "limit": search_request.limit,
+                "total_pages": result.total_pages,
+                "took_ms": 0,
+                "timed_out": False,
+            },
+            suggestions=[],
+        )
+
+    except SearchQueryError as e:
+        logger.warning(
+            "Invalid search query",
+            error=str(e),
+            code=e.code,
+            context=e.context,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    except SearchExecutionError as e:
+        logger.error(
+            "Search execution failed",
+            error=str(e),
+            code=e.code,
+            context=e.context,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Search execution failed",
+        ) from e
+
+    except SearchError as e:
+        logger.error(
+            "Search error",
+            error=str(e),
+            code=e.code,
+            context=e.context,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Search failed",
+        ) from e
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error during search",
+            error=str(e),
+            error_type=type(e).__name__,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        ) from e
+
+
+@router.get(
+    "/search/suggestions",
+    response_model=SearchSuggestionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get search suggestions for autocomplete",
+    description="Retrieve search suggestions for make, model, or body style",
+)
+async def get_search_suggestions(
+    query: Annotated[str, Query(min_length=2, max_length=100, description="Search prefix")],
+    field: Annotated[
+        str,
+        Query(pattern="^(make|model|body_style)$", description="Field to get suggestions for")
+    ] = "make",
+    limit: Annotated[int, Query(ge=1, le=20, description="Maximum suggestions")] = 5,
+    search_service: Annotated[VehicleSearchService, Depends(get_search_service)],
+    current_user: OptionalUser,
+) -> SearchSuggestionResponse:
+    """
+    Get search suggestions for autocomplete.
+
+    Args:
+        query: Search prefix (minimum 2 characters)
+        field: Field to get suggestions for (make, model, or body_style)
+        limit: Maximum number of suggestions to return
+        search_service: Vehicle search service instance
+        current_user: Optional authenticated user
+
+    Returns:
+        List of search suggestions
+
+    Raises:
+        HTTPException: 400 for invalid queries, 500 for search errors
+    """
+    try:
+        suggestions = await search_service.suggest(prefix=query, field=field)
+        
+        # Limit results
+        suggestions = suggestions[:limit]
+        
+        logger.info(
+            "Search suggestions retrieved",
+            query=query,
+            field=field,
+            count=len(suggestions),
+            user_id=str(current_user.id) if current_user else None,
+        )
+        
+        return SearchSuggestionResponse(
+            suggestions=[
+                {"text": text, "score": 1.0, "frequency": 0}
+                for text in suggestions
+            ],
+            query=query,
+            field=field,
+        )
+
+    except SearchQueryError as e:
+        logger.warning(
+            "Invalid suggestion query",
+            error=str(e),
+            code=e.code,
+            query=query,
+            field=field,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    except SearchExecutionError as e:
+        logger.error(
+            "Suggestion search failed",
+            error=str(e),
+            code=e.code,
+            query=query,
+            field=field,
+            user_id=str(current_user.id) if current_user else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve suggestions",
+        ) from e
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error retrieving suggestions",
+            error=str(e),
+            error_type=type(e).__name__,
+            query=query,
+            field=field,
+            user_id=str(current_user.id) if current_user else None,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -31,13 +31,13 @@ class Settings(BaseSettings):
 
     # Database Configuration
     database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/autoselect",
+        default="postgresql://postgres:postgres@postgres:5432/autoselect",
         description="PostgreSQL database connection URL",
     )
 
     # Redis Configuration
     redis_url: str = Field(
-        default="redis://localhost:6379/0",
+        default="redis://redis:6379/0",
         description="Redis connection URL for caching and sessions",
     )
 
@@ -126,6 +126,52 @@ class Settings(BaseSettings):
         default=7,
         ge=1,
         description="JWT refresh token expiration time in days",
+    )
+
+    # Docker/Container Configuration
+    postgres_host: str = Field(
+        default="postgres",
+        description="PostgreSQL host for Docker environment",
+    )
+
+    postgres_port: int = Field(
+        default=5432,
+        ge=1,
+        le=65535,
+        description="PostgreSQL port",
+    )
+
+    postgres_db: str = Field(
+        default="autoselect",
+        description="PostgreSQL database name",
+    )
+
+    postgres_user: str = Field(
+        default="postgres",
+        description="PostgreSQL user",
+    )
+
+    postgres_password: str = Field(
+        default="postgres",
+        description="PostgreSQL password",
+    )
+
+    redis_host: str = Field(
+        default="redis",
+        description="Redis host for Docker environment",
+    )
+
+    redis_port: int = Field(
+        default=6379,
+        ge=1,
+        le=65535,
+        description="Redis port",
+    )
+
+    # Health Check Configuration
+    health_check_path: str = Field(
+        default="/health",
+        description="Health check endpoint path",
     )
 
     @field_validator("secret_key")
@@ -224,6 +270,29 @@ class Settings(BaseSettings):
         """Check if running in staging environment."""
         return self.environment == "staging"
 
+    @property
+    def postgres_connection_string(self) -> str:
+        """
+        Build PostgreSQL connection string from components.
+
+        Returns:
+            PostgreSQL connection URL
+        """
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def redis_connection_string(self) -> str:
+        """
+        Build Redis connection string from components.
+
+        Returns:
+            Redis connection URL
+        """
+        return f"redis://{self.redis_host}:{self.redis_port}/0"
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -237,5 +306,3 @@ def get_settings() -> Settings:
         Settings: Application settings instance
     """
     return Settings()
-```
-```

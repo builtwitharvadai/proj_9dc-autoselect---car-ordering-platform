@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import Browse from './pages/Browse';
+import VehicleDetailPage from './components/VehicleDetail/VehicleDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -180,6 +181,7 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/browse" element={<Browse />} />
+            <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
             <Route path="/configure" element={<Configure />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/track" element={<Track />} />

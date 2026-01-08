@@ -9,6 +9,7 @@ import Browse from './pages/Browse';
 import VehicleDetailPage from './components/VehicleDetail/VehicleDetailPage';
 import ComparisonPage from './components/VehicleComparison/ComparisonPage';
 import Configure from './pages/Configure';
+import SavedConfigurations from './pages/SavedConfigurations';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,17 @@ const Home: React.FC = () => {
       </h2>
       <p className="text-gray-600">
         Your modern car ordering platform is ready for development.
+      </p>
+    </div>
+  );
+};
+
+const SharedConfiguration: React.FC = () => {
+  return (
+    <div className="rounded-lg bg-white p-6 shadow">
+      <h2 className="mb-4 text-2xl font-bold text-gray-900">Shared Configuration</h2>
+      <p className="text-gray-600">
+        Loading shared configuration...
       </p>
     </div>
   );
@@ -181,6 +193,8 @@ const App: React.FC = () => {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/track" element={<Track />} />
                 <Route path="/compare" element={<ComparisonPage />} />
+                <Route path="/saved-configurations" element={<SavedConfigurations />} />
+                <Route path="/shared/:token" element={<SharedConfiguration />} />
               </Routes>
             </main>
 

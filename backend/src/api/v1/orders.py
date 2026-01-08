@@ -8,7 +8,7 @@ with structured logging and audit trails.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -21,7 +21,7 @@ from src.api.deps import (
 )
 from src.core.logging import get_logger
 from src.database.models.order import OrderStatus
-from src.database.models.user import User
+from src.database.models.user import User, UserRole
 from src.schemas.orders import (
     OrderCreateRequest,
     OrderResponse,
@@ -731,3 +731,368 @@ async def get_order_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred",
         ) from e
+
+
+# Dealer-specific endpoints
+dealer_router = APIRouter(prefix="/dealer/orders", tags=["dealer-orders"])
+
+
+@dealer_router.get(
+    "/",
+    response_model=dict,
+    summary="List dealer orders",
+    description="Get paginated list of orders for dealer with filtering",
+)
+async def list_dealer_orders(
+    current_user: CurrentActiveUser,
+    db: DatabaseSession,
+    status_filter: Optional[OrderStatus] = Query(None, description="Filter by order status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of records to return"),
+) -> dict:
+    """
+    List orders for dealer with pagination and filtering.
+
+    Args:
+        current_user: Authenticated dealer user
+        db: Database session
+        status_filter: Optional status filter
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+
+    Returns:
+        dict: Orders list with pagination info
+
+    Raises:
+        HTTPException: 403 if not dealer, 500 if retrieval fails
+    """
+    # Verify dealer role
+    if current_user.role != UserRole.DEALER:
+        logger.warning(
+            "Non-dealer user attempted to access dealer orders",
+            user_id=str(current_user.id),
+            role=current_user.role.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted to dealers only",
+        )
+
+    logger.info(
+        "Listing dealer orders",
+        dealer_id=str(current_user.id),
+        status_filter=status_filter.value if status_filter else None,
+        skip=skip,
+        limit=limit,
+    )
+
+    try:
+        order_service = OrderService(db)
+
+        # Get orders for dealer
+        result = await order_service.get_dealer_orders(
+            dealer_id=current_user.id,
+            status=status_filter,
+            skip=skip,
+            limit=limit,
+        )
+
+        logger.info(
+            "Dealer orders retrieved successfully",
+            dealer_id=str(current_user.id),
+            count=len(result["orders"]),
+            total_count=result["total_count"],
+        )
+
+        return result
+
+    except OrderServiceError as e:
+        logger.error(
+            "Failed to retrieve dealer orders",
+            dealer_id=str(current_user.id),
+            error=str(e),
+            context=e.context,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve dealer orders",
+        ) from e
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error listing dealer orders",
+            dealer_id=str(current_user.id),
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        ) from e
+
+
+@dealer_router.put(
+    "/{order_id}/fulfill",
+    response_model=OrderResponse,
+    summary="Update order fulfillment",
+    description="Update order status and add fulfillment notes",
+)
+async def fulfill_order(
+    order_id: UUID,
+    request: OrderStatusUpdate,
+    current_user: CurrentActiveUser,
+    db: DatabaseSession,
+) -> OrderResponse:
+    """
+    Update order fulfillment status with dealer authorization.
+
+    Args:
+        order_id: Order identifier
+        request: Status update request with notes
+        current_user: Authenticated dealer user
+        db: Database session
+
+    Returns:
+        OrderResponse: Updated order details
+
+    Raises:
+        HTTPException: 403 if not authorized, 404 if not found, 400 if invalid, 500 if fails
+    """
+    # Verify dealer role
+    if current_user.role != UserRole.DEALER:
+        logger.warning(
+            "Non-dealer user attempted to fulfill order",
+            user_id=str(current_user.id),
+            role=current_user.role.value,
+            order_id=str(order_id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted to dealers only",
+        )
+
+    logger.info(
+        "Fulfilling order",
+        order_id=str(order_id),
+        dealer_id=str(current_user.id),
+        new_status=request.order_status.value if request.order_status else None,
+    )
+
+    try:
+        order_service = OrderService(db)
+
+        # Verify dealer owns this order
+        order = await order_service.get_order(order_id=order_id)
+        if order.get("dealer_id") and UUID(order["dealer_id"]) != current_user.id:
+            logger.warning(
+                "Dealer attempted to fulfill order from different dealer",
+                order_id=str(order_id),
+                dealer_id=str(current_user.id),
+                order_dealer_id=order["dealer_id"],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to fulfill this order",
+            )
+
+        # Update status if provided
+        if request.order_status:
+            await order_service.update_order_status(
+                order_id=order_id,
+                new_status=request.order_status,
+                user_id=current_user.id,
+                reason=request.status_notes,
+            )
+
+        # Get updated order
+        updated_order = await order_service.get_order(
+            order_id=order_id,
+            include_items=True,
+            include_history=True,
+        )
+
+        logger.info(
+            "Order fulfilled successfully",
+            order_id=str(order_id),
+            dealer_id=str(current_user.id),
+            new_status=request.order_status.value if request.order_status else None,
+        )
+
+        return OrderResponse(**updated_order)
+
+    except OrderNotFoundError as e:
+        logger.warning(
+            "Order not found for fulfillment",
+            order_id=str(order_id),
+            dealer_id=str(current_user.id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        ) from e
+
+    except HTTPException:
+        raise
+
+    except OrderProcessingError as e:
+        logger.warning(
+            "Invalid order fulfillment transition",
+            order_id=str(order_id),
+            dealer_id=str(current_user.id),
+            error=str(e),
+            context=e.context,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    except OrderServiceError as e:
+        logger.error(
+            "Failed to fulfill order",
+            order_id=str(order_id),
+            dealer_id=str(current_user.id),
+            error=str(e),
+            context=e.context,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fulfill order",
+        ) from e
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error fulfilling order",
+            order_id=str(order_id),
+            dealer_id=str(current_user.id),
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        ) from e
+
+
+@dealer_router.post(
+    "/bulk",
+    response_model=dict,
+    summary="Bulk order operations",
+    description="Perform bulk operations on multiple orders",
+)
+async def bulk_order_operations(
+    order_ids: List[UUID],
+    operation: str = Query(..., description="Operation to perform: update_status"),
+    new_status: Optional[OrderStatus] = Query(None, description="New status for orders"),
+    notes: Optional[str] = Query(None, max_length=500, description="Operation notes"),
+    current_user: CurrentActiveUser = Depends(get_current_active_user),
+    db: DatabaseSession = Depends(),
+) -> dict:
+    """
+    Perform bulk operations on multiple orders.
+
+    Args:
+        order_ids: List of order identifiers
+        operation: Operation to perform
+        new_status: New status for orders (if operation is update_status)
+        notes: Optional operation notes
+        current_user: Authenticated dealer user
+        db: Database session
+
+    Returns:
+        dict: Results of bulk operation
+
+    Raises:
+        HTTPException: 403 if not authorized, 400 if invalid, 500 if fails
+    """
+    # Verify dealer role
+    if current_user.role != UserRole.DEALER:
+        logger.warning(
+            "Non-dealer user attempted bulk order operation",
+            user_id=str(current_user.id),
+            role=current_user.role.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted to dealers only",
+        )
+
+    logger.info(
+        "Performing bulk order operation",
+        dealer_id=str(current_user.id),
+        operation=operation,
+        order_count=len(order_ids),
+    )
+
+    try:
+        order_service = OrderService(db)
+
+        results = {
+            "successful": [],
+            "failed": [],
+            "total": len(order_ids),
+        }
+
+        for order_id in order_ids:
+            try:
+                # Verify dealer owns this order
+                order = await order_service.get_order(order_id=order_id)
+                if order.get("dealer_id") and UUID(order["dealer_id"]) != current_user.id:
+                    results["failed"].append({
+                        "order_id": str(order_id),
+                        "error": "Not authorized to modify this order",
+                    })
+                    continue
+
+                # Perform operation
+                if operation == "update_status" and new_status:
+                    await order_service.update_order_status(
+                        order_id=order_id,
+                        new_status=new_status,
+                        user_id=current_user.id,
+                        reason=notes or f"Bulk operation: {operation}",
+                    )
+                    results["successful"].append(str(order_id))
+                else:
+                    results["failed"].append({
+                        "order_id": str(order_id),
+                        "error": "Invalid operation",
+                    })
+
+            except OrderNotFoundError:
+                results["failed"].append({
+                    "order_id": str(order_id),
+                    "error": "Order not found",
+                })
+            except OrderProcessingError as e:
+                results["failed"].append({
+                    "order_id": str(order_id),
+                    "error": str(e),
+                })
+
+        logger.info(
+            "Bulk order operation completed",
+            dealer_id=str(current_user.id),
+            operation=operation,
+            successful=len(results["successful"]),
+            failed=len(results["failed"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error in bulk order operation",
+            dealer_id=str(current_user.id),
+            operation=operation,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        ) from e
+
+
+# Include dealer router in main router
+router.include_router(dealer_router)

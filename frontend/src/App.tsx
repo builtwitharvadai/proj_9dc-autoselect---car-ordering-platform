@@ -10,6 +10,7 @@ import VehicleDetailPage from './components/VehicleDetail/VehicleDetailPage';
 import ComparisonPage from './components/VehicleComparison/ComparisonPage';
 import Configure from './pages/Configure';
 import SavedConfigurations from './pages/SavedConfigurations';
+import ConfigurationManagement from './pages/Dealer/ConfigurationManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -195,6 +196,14 @@ const App: React.FC = () => {
                 <Route path="/compare" element={<ComparisonPage />} />
                 <Route path="/saved-configurations" element={<SavedConfigurations />} />
                 <Route path="/shared/:token" element={<SharedConfiguration />} />
+                <Route path="/dealer/configuration" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/options" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/packages" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/pricing" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/regions" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/analytics" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/permissions" element={<ConfigurationManagement />} />
+                <Route path="/dealer/configuration/activity" element={<ConfigurationManagement />} />
               </Routes>
             </main>
 

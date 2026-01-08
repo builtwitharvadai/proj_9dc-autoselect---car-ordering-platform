@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ConfigurationProvider } from '../contexts/ConfigurationContext';
+import ConfigurationWizard from '../components/Configuration/ConfigurationWizard';
 
 interface ConfigurationOption {
   readonly id: string;
@@ -73,13 +76,53 @@ const CATEGORIES: readonly { readonly id: string; readonly label: string }[] = [
   { id: 'technology', label: 'Technology' },
 ] as const;
 
-export default function Configure(): JSX.Element {
+function ConfigureContent(): JSX.Element {
+  const { vehicleId } = useParams<{ vehicleId: string }>();
+  const navigate = useNavigate();
   const [configuration, setConfiguration] = useState<ConfigurationState>({
     selectedOptions: [],
     totalPrice: 0,
   });
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  if (!vehicleId) {
+    return (
+      <div className="min-h-screen bg-[rgb(var(--color-gray-50))] pt-16">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-[var(--radius-lg)] bg-white p-12 text-center shadow-[var(--shadow-sm)]">
+            <svg
+              className="mx-auto h-12 w-12 text-[rgb(var(--color-gray-400))]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <h3 className="mt-4 text-lg font-medium text-[rgb(var(--color-gray-900))]">
+              Vehicle ID Required
+            </h3>
+            <p className="mt-2 text-sm text-[rgb(var(--color-gray-600))]">
+              Please select a vehicle to configure
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/browse')}
+              className="mt-6 inline-flex items-center rounded-[var(--radius-md)] bg-[rgb(var(--color-primary-600))] px-4 py-2 text-sm font-medium text-white transition-colors duration-[var(--transition-fast)] hover:bg-[rgb(var(--color-primary-700))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--color-primary-600))]"
+            >
+              Browse Vehicles
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleOptionToggle = (optionId: string, price: number): void => {
     setConfiguration((prev) => {
@@ -110,6 +153,14 @@ export default function Configure(): JSX.Element {
     });
   };
 
+  const handleComplete = (): void => {
+    navigate('/cart');
+  };
+
+  const handleCancel = (): void => {
+    navigate('/browse');
+  };
+
   const filteredOptions =
     selectedCategory === 'all'
       ? MOCK_OPTIONS
@@ -131,16 +182,14 @@ export default function Configure(): JSX.Element {
   return (
     <div className="min-h-screen bg-[rgb(var(--color-gray-50))] pt-16">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-[rgb(var(--color-gray-900))] sm:text-4xl">
-            Configure Your Vehicle
-          </h1>
-          <p className="mt-2 text-base text-[rgb(var(--color-gray-600))] sm:text-lg">
-            Customize your vehicle with premium options and packages
-          </p>
-        </div>
+        <ConfigurationWizard
+          vehicleId={vehicleId}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+          enablePersistence={true}
+        />
 
-        <div className="mb-8 rounded-[var(--radius-lg)] bg-white p-6 shadow-[var(--shadow-sm)]">
+        <div className="mt-8 mb-8 rounded-[var(--radius-lg)] bg-white p-6 shadow-[var(--shadow-sm)]">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1">
               <label
@@ -332,5 +381,19 @@ export default function Configure(): JSX.Element {
         )}
       </div>
     </div>
+  );
+}
+
+export default function Configure(): JSX.Element {
+  const { vehicleId } = useParams<{ vehicleId: string }>();
+
+  if (!vehicleId) {
+    return <ConfigureContent />;
+  }
+
+  return (
+    <ConfigurationProvider vehicleId={vehicleId} enablePersistence={true}>
+      <ConfigureContent />
+    </ConfigurationProvider>
   );
 }

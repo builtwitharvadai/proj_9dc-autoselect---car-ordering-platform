@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.v1.auth import router as auth_router
+from src.api.v1.configuration import router as configuration_router
 from src.api.v1.dealer import router as dealer_router
 from src.api.v1.vehicles import router as vehicles_router
 from src.core.config import get_settings
@@ -299,6 +300,9 @@ app.include_router(vehicles_router, prefix="/api/v1/vehicles", tags=["Vehicles"]
 
 # Include dealer router
 app.include_router(dealer_router, prefix="/api/v1/dealer", tags=["Dealer"])
+
+# Include configuration router
+app.include_router(configuration_router, prefix="/api/v1", tags=["Configuration"])
 
 # Service routers will be added here
 # Example:

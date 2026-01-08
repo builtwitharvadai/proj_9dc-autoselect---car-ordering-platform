@@ -1,0 +1,242 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: autoselect-dev
+  labels:
+    app: autoselect
+    component: postgres
+    tier: database
+    environment: development
+  annotations:
+    description: "PostgreSQL persistent storage for AutoSelect platform"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+  volumeMode: Filesystem
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: autoselect-dev
+  labels:
+    app: autoselect
+    component: postgres
+    tier: database
+    environment: development
+    version: "15.0"
+  annotations:
+    description: "PostgreSQL database deployment for AutoSelect platform"
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: autoselect
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: autoselect
+        component: postgres
+        tier: database
+        environment: development
+        version: "15.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9187"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop:
+                - ALL
+          
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: autoselect-postgres-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: autoselect-postgres-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: autoselect-postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_INITDB_ARGS
+              value: "--encoding=UTF8 --locale=en_US.UTF-8"
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: "scram-sha-256"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+              ephemeral-storage: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+              ephemeral-storage: 2Gi
+          
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-config
+              mountPath: /etc/postgresql
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - pg_ctl stop -D $PGDATA -m fast -w -t 30
+      
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: postgres-config
+          configMap:
+            name: autoselect-configmap
+            items:
+              - key: postgres.conf
+                path: postgresql.conf
+            defaultMode: 0444
+        - name: tmp
+          emptyDir:
+            sizeLimit: 500Mi
+        - name: run
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: init-scripts
+          configMap:
+            name: autoselect-configmap
+            items:
+              - key: init-db.sql
+                path: 01-init-db.sql
+            defaultMode: 0444
+      
+      terminationGracePeriodSeconds: 60
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: autoselect-dev
+  labels:
+    app: autoselect
+    component: postgres
+    tier: database
+    environment: development
+  annotations:
+    description: "PostgreSQL database service for AutoSelect platform"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: autoselect
+    component: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

@@ -33,6 +33,11 @@ from src.services.payments.service import (
     PaymentProcessingError,
     PaymentValidationError,
 )
+from src.services.notifications.service import (
+    NotificationService,
+    NotificationServiceError,
+)
+from src.database.models.notification import NotificationType
 
 logger = get_logger(__name__)
 
@@ -70,12 +75,14 @@ class OrderService:
         repository: Order repository for data access
         state_machine: State machine for order lifecycle management
         payment_service: Payment service for payment operations
+        notification_service: Notification service for customer notifications
     """
 
     def __init__(
         self,
         session: AsyncSession,
         payment_service: Optional[PaymentService] = None,
+        notification_service: Optional[NotificationService] = None,
     ):
         """
         Initialize order service.
@@ -83,14 +90,17 @@ class OrderService:
         Args:
             session: Async database session
             payment_service: Optional payment service instance
+            notification_service: Optional notification service instance
         """
         self.repository = OrderRepository(session)
         self.state_machine = OrderStateMachine(session)
         self.payment_service = payment_service
+        self.notification_service = notification_service
 
         logger.info(
             "OrderService initialized",
             has_payment_service=payment_service is not None,
+            has_notification_service=notification_service is not None,
         )
 
     async def create_order(
@@ -215,6 +225,14 @@ class OrderService:
                     )
                     # Continue without payment intent - can be created later
 
+            # Send order creation notification
+            if self.notification_service:
+                await self._send_order_notification(
+                    user_id=user_id,
+                    order=order,
+                    notification_type=NotificationType.ORDER_CREATED,
+                )
+
             logger.info(
                 "Order created successfully",
                 order_id=str(order.id),
@@ -317,6 +335,16 @@ class OrderService:
                 order_id,
                 include_history=True,
             )
+
+            # Send status change notification
+            if self.notification_service and order.user_id:
+                notification_type = self._get_notification_type_for_status(new_status)
+                if notification_type:
+                    await self._send_order_notification(
+                        user_id=order.user_id,
+                        order=order,
+                        notification_type=notification_type,
+                    )
 
             logger.info(
                 "Order status updated successfully",
@@ -470,6 +498,74 @@ class OrderService:
                 user_id=str(user_id),
                 error=str(e),
             ) from e
+
+    async def _send_order_notification(
+        self,
+        user_id: uuid.UUID,
+        order: Any,
+        notification_type: NotificationType,
+    ) -> None:
+        """
+        Send order notification to user.
+
+        Args:
+            user_id: User ID to send notification to
+            order: Order instance
+            notification_type: Type of notification to send
+        """
+        try:
+            context = {
+                "order_number": order.order_number,
+                "order_id": str(order.id),
+                "status": order.status.value,
+                "total_amount": float(order.total_amount),
+                "customer_name": f"{order.customer_info.get('first_name', '')} {order.customer_info.get('last_name', '')}".strip(),
+                "estimated_delivery_date": order.estimated_delivery_date.isoformat() if order.estimated_delivery_date else None,
+            }
+
+            await self.notification_service.send_notification(
+                user_id=user_id,
+                notification_type=notification_type,
+                context=context,
+            )
+
+            logger.info(
+                "Order notification sent",
+                order_id=str(order.id),
+                user_id=str(user_id),
+                notification_type=notification_type.value,
+            )
+
+        except NotificationServiceError as e:
+            logger.error(
+                "Failed to send order notification",
+                order_id=str(order.id),
+                user_id=str(user_id),
+                notification_type=notification_type.value,
+                error=str(e),
+            )
+            # Don't raise - notification failure shouldn't block order processing
+
+    def _get_notification_type_for_status(
+        self,
+        status: OrderStatus,
+    ) -> Optional[NotificationType]:
+        """
+        Get notification type for order status.
+
+        Args:
+            status: Order status
+
+        Returns:
+            Notification type or None if no notification needed
+        """
+        status_notification_map = {
+            OrderStatus.CONFIRMED: NotificationType.ORDER_CONFIRMED,
+            OrderStatus.SHIPPED: NotificationType.ORDER_SHIPPED,
+            OrderStatus.DELIVERED: NotificationType.ORDER_DELIVERED,
+            OrderStatus.CANCELLED: NotificationType.ORDER_CANCELLED,
+        }
+        return status_notification_map.get(status)
 
     def _validate_order_data(
         self,

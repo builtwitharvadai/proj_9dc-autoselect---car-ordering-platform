@@ -1,0 +1,188 @@
+{
+  "order_confirmation": {
+    "template_id": "order_confirmation",
+    "name": "Order Confirmation",
+    "description": "SMS notification sent when order is confirmed",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "total_amount",
+      "estimated_delivery"
+    ],
+    "template": "Hi {{customer_name}}, your order #{{order_number}} for ${{total_amount}} has been confirmed! Estimated delivery: {{estimated_delivery}}. Track at autoselect.com/track/{{order_number}}"
+  },
+  "order_shipped": {
+    "template_id": "order_shipped",
+    "name": "Order Shipped",
+    "description": "SMS notification sent when order is shipped",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "tracking_number",
+      "carrier"
+    ],
+    "template": "Great news {{customer_name}}! Your order #{{order_number}} has shipped via {{carrier}}. Tracking: {{tracking_number}}. Track at autoselect.com/track/{{order_number}}"
+  },
+  "order_in_transit": {
+    "template_id": "order_in_transit",
+    "name": "Order In Transit",
+    "description": "SMS notification sent when order is in transit",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "estimated_delivery"
+    ],
+    "template": "Hi {{customer_name}}, your order #{{order_number}} is on its way! Expected delivery: {{estimated_delivery}}. Track at autoselect.com/track/{{order_number}}"
+  },
+  "order_out_for_delivery": {
+    "template_id": "order_out_for_delivery",
+    "name": "Out for Delivery",
+    "description": "SMS notification sent when order is out for delivery",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "delivery_window"
+    ],
+    "template": "{{customer_name}}, your order #{{order_number}} is out for delivery today! Delivery window: {{delivery_window}}. Track at autoselect.com/track/{{order_number}}"
+  },
+  "order_delivered": {
+    "template_id": "order_delivered",
+    "name": "Order Delivered",
+    "description": "SMS notification sent when order is delivered",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "delivery_time"
+    ],
+    "template": "Your order #{{order_number}} was delivered at {{delivery_time}}! Thank you for choosing AutoSelect, {{customer_name}}. Need help? Reply SUPPORT"
+  },
+  "order_delayed": {
+    "template_id": "order_delayed",
+    "name": "Order Delayed",
+    "description": "SMS notification sent when order is delayed",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "new_estimated_delivery",
+      "reason"
+    ],
+    "template": "Hi {{customer_name}}, order #{{order_number}} is delayed due to {{reason}}. New estimated delivery: {{new_estimated_delivery}}. We apologize for the inconvenience."
+  },
+  "order_cancelled": {
+    "template_id": "order_cancelled",
+    "name": "Order Cancelled",
+    "description": "SMS notification sent when order is cancelled",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "refund_amount",
+      "refund_timeline"
+    ],
+    "template": "{{customer_name}}, order #{{order_number}} has been cancelled. Refund of ${{refund_amount}} will be processed within {{refund_timeline}}. Questions? Reply HELP"
+  },
+  "payment_processing": {
+    "template_id": "payment_processing",
+    "name": "Payment Processing",
+    "description": "SMS notification sent when payment is being processed",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "amount"
+    ],
+    "template": "Hi {{customer_name}}, we're processing your payment of ${{amount}} for order #{{order_number}}. You'll receive confirmation shortly."
+  },
+  "payment_failed": {
+    "template_id": "payment_failed",
+    "name": "Payment Failed",
+    "description": "SMS notification sent when payment fails",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "amount"
+    ],
+    "template": "{{customer_name}}, payment of ${{amount}} for order #{{order_number}} failed. Please update payment method at autoselect.com/orders/{{order_number}}"
+  },
+  "payment_refunded": {
+    "template_id": "payment_refunded",
+    "name": "Payment Refunded",
+    "description": "SMS notification sent when payment is refunded",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "refund_amount",
+      "refund_timeline"
+    ],
+    "template": "{{customer_name}}, refund of ${{refund_amount}} for order #{{order_number}} has been initiated. Expect funds within {{refund_timeline}}."
+  },
+  "order_ready_for_pickup": {
+    "template_id": "order_ready_for_pickup",
+    "name": "Ready for Pickup",
+    "description": "SMS notification sent when order is ready for pickup",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "pickup_location",
+      "pickup_hours"
+    ],
+    "template": "{{customer_name}}, order #{{order_number}} is ready for pickup at {{pickup_location}}! Hours: {{pickup_hours}}. Bring your ID and order confirmation."
+  },
+  "delivery_attempt_failed": {
+    "template_id": "delivery_attempt_failed",
+    "name": "Delivery Attempt Failed",
+    "description": "SMS notification sent when delivery attempt fails",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "next_attempt_date"
+    ],
+    "template": "{{customer_name}}, delivery attempt for order #{{order_number}} failed. Next attempt: {{next_attempt_date}}. Update delivery preferences at autoselect.com/track/{{order_number}}"
+  },
+  "order_status_update": {
+    "template_id": "order_status_update",
+    "name": "Order Status Update",
+    "description": "Generic SMS notification for order status changes",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "status",
+      "status_message"
+    ],
+    "template": "Hi {{customer_name}}, order #{{order_number}} status: {{status}}. {{status_message}} Track at autoselect.com/track/{{order_number}}"
+  },
+  "quality_check_complete": {
+    "template_id": "quality_check_complete",
+    "name": "Quality Check Complete",
+    "description": "SMS notification sent when quality check is complete",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name"
+    ],
+    "template": "{{customer_name}}, your vehicle for order #{{order_number}} has passed quality inspection and is ready for shipment! Estimated delivery coming soon."
+  },
+  "production_started": {
+    "template_id": "production_started",
+    "name": "Production Started",
+    "description": "SMS notification sent when vehicle production starts",
+    "max_length": 160,
+    "variables": [
+      "order_number",
+      "customer_name",
+      "estimated_completion"
+    ],
+    "template": "Great news {{customer_name}}! Production has started on your order #{{order_number}}. Estimated completion: {{estimated_completion}}."
+  }
+}

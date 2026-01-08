@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation - AutoSelect</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: #ffffff;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.95;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+
+        .order-summary {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+
+        .order-summary h2 {
+            font-size: 20px;
+            color: #007bff;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .order-info {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .order-info-row {
+            display: table-row;
+        }
+
+        .order-info-label,
+        .order-info-value {
+            display: table-cell;
+            padding: 8px 0;
+        }
+
+        .order-info-label {
+            font-weight: 600;
+            color: #555555;
+            width: 40%;
+        }
+
+        .order-info-value {
+            color: #333333;
+        }
+
+        .order-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #007bff;
+        }
+
+        .vehicle-details {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .vehicle-details h3 {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 15px;
+        }
+
+        .vehicle-item {
+            border-bottom: 1px solid #e0e0e0;
+            padding: 15px 0;
+        }
+
+        .vehicle-item:last-child {
+            border-bottom: none;
+        }
+
+        .vehicle-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333333;
+            margin-bottom: 8px;
+        }
+
+        .vehicle-specs {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 5px;
+        }
+
+        .vehicle-price {
+            font-size: 16px;
+            font-weight: 600;
+            color: #007bff;
+            margin-top: 10px;
+        }
+
+        .pricing-breakdown {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 15px;
+        }
+
+        .pricing-row.subtotal {
+            border-top: 1px solid #dee2e6;
+            margin-top: 10px;
+            padding-top: 15px;
+        }
+
+        .pricing-row.total {
+            border-top: 2px solid #007bff;
+            margin-top: 10px;
+            padding-top: 15px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #007bff;
+        }
+
+        .customer-info {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .customer-info h3 {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 15px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-section h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #007bff;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-section p {
+            font-size: 14px;
+            color: #555555;
+            line-height: 1.5;
+        }
+
+        .next-steps {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .next-steps h3 {
+            font-size: 18px;
+            color: #007bff;
+            margin-bottom: 15px;
+        }
+
+        .next-steps ol {
+            margin-left: 20px;
+            color: #333333;
+        }
+
+        .next-steps li {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            margin: 20px 0;
+            transition: background-color 0.3s ease;
+        }
+
+        .cta-button:hover {
+            background-color: #0056b3;
+        }
+
+        .support-info {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+            text-align: center;
+        }
+
+        .support-info p {
+            font-size: 14px;
+            color: #555555;
+            margin-bottom: 10px;
+        }
+
+        .support-info a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .footer p {
+            font-size: 13px;
+            color: #666666;
+            margin-bottom: 8px;
+        }
+
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .social-links {
+            margin: 15px 0;
+        }
+
+        .social-links a {
+            display: inline-block;
+            margin: 0 8px;
+            color: #007bff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 30px 20px;
+            }
+
+            .order-summary,
+            .vehicle-details,
+            .customer-info,
+            .pricing-breakdown,
+            .next-steps,
+            .support-info {
+                padding: 15px;
+            }
+
+            .order-info-label,
+            .order-info-value {
+                display: block;
+                width: 100%;
+                padding: 4px 0;
+            }
+
+            .order-info-label {
+                font-weight: 700;
+            }
+
+            .cta-button {
+                display: block;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>Order Confirmed!</h1>
+            <p>Thank you for your purchase</p>
+        </div>
+
+        <div class="content">
+            <p class="greeting">Dear {{ customer_name }},</p>
+            
+            <p>Thank you for choosing AutoSelect! We're excited to confirm that your order has been successfully placed and is now being processed.</p>
+
+            <div class="order-summary">
+                <h2>Order Summary</h2>
+                <div class="order-info">
+                    <div class="order-info-row">
+                        <div class="order-info-label">Order Number:</div>
+                        <div class="order-info-value">
+                            <span class="order-number">{{ order_number }}</span>
+                        </div>
+                    </div>
+                    <div class="order-info-row">
+                        <div class="order-info-label">Order Date:</div>
+                        <div class="order-info-value">{{ order_date }}</div>
+                    </div>
+                    <div class="order-info-row">
+                        <div class="order-info-label">Order Status:</div>
+                        <div class="order-info-value">{{ order_status }}</div>
+                    </div>
+                    <div class="order-info-row">
+                        <div class="order-info-label">Estimated Delivery:</div>
+                        <div class="order-info-value">{{ estimated_delivery }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vehicle-details">
+                <h3>Vehicle Details</h3>
+                {% for item in order_items %}
+                <div class="vehicle-item">
+                    <div class="vehicle-name">{{ item.vehicle_name }}</div>
+                    <div class="vehicle-specs">
+                        <strong>Trim:</strong> {{ item.trim }}<br>
+                        <strong>Color:</strong> {{ item.color }}<br>
+                        {% if item.packages %}
+                        <strong>Packages:</strong> {{ item.packages }}<br>
+                        {% endif %}
+                        {% if item.options %}
+                        <strong>Options:</strong> {{ item.options }}<br>
+                        {% endif %}
+                        <strong>Quantity:</strong> {{ item.quantity }}
+                    </div>
+                    <div class="vehicle-price">{{ item.price }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="pricing-breakdown">
+                <div class="pricing-row">
+                    <span>Subtotal:</span>
+                    <span>{{ subtotal }}</span>
+                </div>
+                {% if discount_amount %}
+                <div class="pricing-row">
+                    <span>Discount:</span>
+                    <span>-{{ discount_amount }}</span>
+                </div>
+                {% endif %}
+                <div class="pricing-row">
+                    <span>Tax:</span>
+                    <span>{{ tax_amount }}</span>
+                </div>
+                {% if destination_charge %}
+                <div class="pricing-row">
+                    <span>Destination Charge:</span>
+                    <span>{{ destination_charge }}</span>
+                </div>
+                {% endif %}
+                <div class="pricing-row total">
+                    <span>Total:</span>
+                    <span>{{ total_amount }}</span>
+                </div>
+            </div>
+
+            <div class="customer-info">
+                <h3>Customer Information</h3>
+                
+                <div class="info-section">
+                    <h4>Contact Information</h4>
+                    <p>
+                        {{ customer_name }}<br>
+                        {{ customer_email }}<br>
+                        {{ customer_phone }}
+                    </p>
+                </div>
+
+                <div class="info-section">
+                    <h4>Delivery Address</h4>
+                    <p>
+                        {{ delivery_address_line1 }}<br>
+                        {% if delivery_address_line2 %}
+                        {{ delivery_address_line2 }}<br>
+                        {% endif %}
+                        {{ delivery_city }}, {{ delivery_state }} {{ delivery_postal_code }}<br>
+                        {{ delivery_country }}
+                    </p>
+                </div>
+
+                {% if payment_method %}
+                <div class="info-section">
+                    <h4>Payment Method</h4>
+                    <p>{{ payment_method }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="next-steps">
+                <h3>What Happens Next?</h3>
+                <ol>
+                    <li><strong>Order Processing:</strong> Your order is being prepared and will be sent to production within 1-2 business days.</li>
+                    <li><strong>Production:</strong> Your vehicle will be built according to your specifications. This typically takes 4-6 weeks.</li>
+                    <li><strong>Quality Check:</strong> Once production is complete, your vehicle will undergo a thorough quality inspection.</li>
+                    <li><strong>Shipping:</strong> After passing quality checks, your vehicle will be shipped to your delivery address.</li>
+                    <li><strong>Delivery:</strong> You'll receive tracking information and delivery updates via email and SMS.</li>
+                </ol>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{ track_order_url }}" class="cta-button">Track Your Order</a>
+            </div>
+
+            <div class="support-info">
+                <p><strong>Need Help?</strong></p>
+                <p>Our customer support team is here to assist you.</p>
+                <p>
+                    Email: <a href="mailto:support@autoselect.com">support@autoselect.com</a><br>
+                    Phone: <a href="tel:+18005551234">1-800-555-1234</a>
+                </p>
+                <p>Monday - Friday: 9:00 AM - 6:00 PM EST<br>Saturday: 10:00 AM - 4:00 PM EST</p>
+            </div>
+
+            <p style="margin-top: 30px; font-size: 14px; color: #555555;">
+                Thank you for choosing AutoSelect. We're committed to providing you with an exceptional car buying experience.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p><strong>AutoSelect</strong></p>
+            <p>123 Auto Drive, Detroit, MI 48201</p>
+            
+            <div class="social-links">
+                <a href="{{ facebook_url }}">Facebook</a> |
+                <a href="{{ twitter_url }}">Twitter</a> |
+                <a href="{{ instagram_url }}">Instagram</a> |
+                <a href="{{ linkedin_url }}">LinkedIn</a>
+            </div>
+
+            <p>
+                <a href="{{ unsubscribe_url }}">Unsubscribe</a> |
+                <a href="{{ privacy_policy_url }}">Privacy Policy</a> |
+                <a href="{{ terms_url }}">Terms of Service</a>
+            </p>
+
+            <p style="margin-top: 15px; font-size: 12px; color: #999999;">
+                &copy; {{ current_year }} AutoSelect. All rights reserved.<br>
+                This email was sent to {{ customer_email }}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,141 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE and editors
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+coverage.xml
+*.cover
+*.log
+.cache
+nosetests.xml
+test-results/
+junit.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linting
+.ruff_cache/
+
+# Documentation
+docs/_build/
+docs/.doctrees/
+site/
+*.md
+README*
+LICENSE
+CHANGELOG*
+
+# Development files
+.env
+.env.*
+.envrc
+*.local
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Alembic
+alembic.ini
+migrations/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+azure-pipelines.yml
+Jenkinsfile
+
+# Package managers
+pip-wheel-metadata/
+poetry.lock
+Pipfile.lock
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+credentials/

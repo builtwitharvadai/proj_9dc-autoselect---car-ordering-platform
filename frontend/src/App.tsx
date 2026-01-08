@@ -13,6 +13,7 @@ import SavedConfigurations from './pages/SavedConfigurations';
 import ConfigurationManagement from './pages/Dealer/ConfigurationManagement';
 import Orders from './pages/Orders';
 import OrderDetailPage from './components/OrderTracking/OrderDetailPage';
+import OrderManagement from './pages/Dealer/OrderManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -208,6 +209,7 @@ const App: React.FC = () => {
                 <Route path="/dealer/configuration/analytics" element={<ConfigurationManagement />} />
                 <Route path="/dealer/configuration/permissions" element={<ConfigurationManagement />} />
                 <Route path="/dealer/configuration/activity" element={<ConfigurationManagement />} />
+                <Route path="/dealer/orders" element={<OrderManagement dealerId="dealer-1" />} />
               </Routes>
             </main>
 

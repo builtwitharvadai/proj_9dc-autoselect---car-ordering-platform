@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Status Update - AutoSelect</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      background-color: #f4f4f4;
+      padding: 20px;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .email-header {
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+      color: #ffffff;
+      padding: 30px 20px;
+      text-align: center;
+    }
+    
+    .email-header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .email-header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .email-body {
+      padding: 30px 20px;
+    }
+    
+    .greeting {
+      font-size: 16px;
+      margin-bottom: 20px;
+      color: #333333;
+    }
+    
+    .status-card {
+      background-color: #f8f9fa;
+      border-left: 4px solid #007bff;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    .status-card h2 {
+      font-size: 18px;
+      color: #007bff;
+      margin-bottom: 10px;
+    }
+    
+    .status-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .status-info:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    
+    .status-label {
+      font-weight: 600;
+      color: #495057;
+      font-size: 14px;
+    }
+    
+    .status-value {
+      color: #212529;
+      font-size: 14px;
+      text-align: right;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-pending {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    
+    .status-confirmed {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+    
+    .status-in-production {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .status-shipped {
+      background-color: #cce5ff;
+      color: #004085;
+    }
+    
+    .status-delivered {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .status-cancelled {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    
+    .timeline {
+      margin: 30px 0;
+    }
+    
+    .timeline h3 {
+      font-size: 16px;
+      color: #495057;
+      margin-bottom: 20px;
+    }
+    
+    .timeline-item {
+      position: relative;
+      padding-left: 30px;
+      margin-bottom: 20px;
+    }
+    
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      width: 2px;
+      height: calc(100% + 20px);
+      background-color: #dee2e6;
+    }
+    
+    .timeline-item:last-child::before {
+      display: none;
+    }
+    
+    .timeline-dot {
+      position: absolute;
+      left: 0;
+      top: 4px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background-color: #007bff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 2px #007bff;
+    }
+    
+    .timeline-dot.completed {
+      background-color: #28a745;
+      box-shadow: 0 0 0 2px #28a745;
+    }
+    
+    .timeline-dot.current {
+      background-color: #007bff;
+      box-shadow: 0 0 0 2px #007bff;
+      animation: pulse 2s infinite;
+    }
+    
+    .timeline-dot.upcoming {
+      background-color: #e9ecef;
+      box-shadow: 0 0 0 2px #e9ecef;
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 2px #007bff;
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(0, 123, 255, 0.3);
+      }
+    }
+    
+    .timeline-content {
+      font-size: 14px;
+    }
+    
+    .timeline-title {
+      font-weight: 600;
+      color: #212529;
+      margin-bottom: 4px;
+    }
+    
+    .timeline-date {
+      font-size: 12px;
+      color: #6c757d;
+    }
+    
+    .delivery-estimate {
+      background-color: #e7f3ff;
+      border: 1px solid #b3d9ff;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    .delivery-estimate-label {
+      font-size: 12px;
+      color: #495057;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .delivery-estimate-date {
+      font-size: 20px;
+      font-weight: 700;
+      color: #007bff;
+    }
+    
+    .order-details {
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    
+    .order-details h3 {
+      font-size: 16px;
+      color: #495057;
+      margin-bottom: 15px;
+    }
+    
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .order-item:last-child {
+      border-bottom: none;
+    }
+    
+    .item-name {
+      font-size: 14px;
+      color: #212529;
+    }
+    
+    .item-quantity {
+      font-size: 12px;
+      color: #6c757d;
+    }
+    
+    .item-price {
+      font-size: 14px;
+      font-weight: 600;
+      color: #212529;
+    }
+    
+    .cta-button {
+      display: inline-block;
+      background-color: #007bff;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 12px 30px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      text-align: center;
+      margin: 20px 0;
+      transition: background-color 0.3s ease;
+    }
+    
+    .cta-button:hover {
+      background-color: #0056b3;
+    }
+    
+    .button-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+    
+    .help-section {
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    .help-section p {
+      font-size: 14px;
+      color: #495057;
+      margin-bottom: 10px;
+    }
+    
+    .help-section a {
+      color: #007bff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .help-section a:hover {
+      text-decoration: underline;
+    }
+    
+    .email-footer {
+      background-color: #f8f9fa;
+      padding: 20px;
+      text-align: center;
+      border-top: 1px solid #dee2e6;
+    }
+    
+    .email-footer p {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 10px;
+    }
+    
+    .social-links {
+      margin: 15px 0;
+    }
+    
+    .social-links a {
+      display: inline-block;
+      margin: 0 8px;
+      color: #6c757d;
+      text-decoration: none;
+      font-size: 12px;
+    }
+    
+    .social-links a:hover {
+      color: #007bff;
+    }
+    
+    .unsubscribe {
+      font-size: 11px;
+      color: #adb5bd;
+      margin-top: 15px;
+    }
+    
+    .unsubscribe a {
+      color: #6c757d;
+      text-decoration: none;
+    }
+    
+    .unsubscribe a:hover {
+      text-decoration: underline;
+    }
+    
+    @media only screen and (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      
+      .email-header {
+        padding: 20px 15px;
+      }
+      
+      .email-header h1 {
+        font-size: 20px;
+      }
+      
+      .email-body {
+        padding: 20px 15px;
+      }
+      
+      .status-info {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .status-value {
+        text-align: left;
+        margin-top: 5px;
+      }
+      
+      .delivery-estimate-date {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="email-header">
+      <h1>Order Status Update</h1>
+      <p>Your order is on its way!</p>
+    </div>
+    
+    <div class="email-body">
+      <p class="greeting">Hello {{ customer_name }},</p>
+      
+      <p>We have an update on your order. Here's the latest information:</p>
+      
+      <div class="status-card">
+        <h2>Current Status</h2>
+        <div class="status-info">
+          <span class="status-label">Order Number:</span>
+          <span class="status-value">{{ order_number }}</span>
+        </div>
+        <div class="status-info">
+          <span class="status-label">Status:</span>
+          <span class="status-value">
+            <span class="status-badge status-{{ status_class }}">{{ current_status }}</span>
+          </span>
+        </div>
+        <div class="status-info">
+          <span class="status-label">Order Date:</span>
+          <span class="status-value">{{ order_date }}</span>
+        </div>
+        <div class="status-info">
+          <span class="status-label">Last Updated:</span>
+          <span class="status-value">{{ last_updated }}</span>
+        </div>
+      </div>
+      
+      {% if estimated_delivery %}
+      <div class="delivery-estimate">
+        <div class="delivery-estimate-label">Estimated Delivery</div>
+        <div class="delivery-estimate-date">{{ estimated_delivery }}</div>
+      </div>
+      {% endif %}
+      
+      <div class="timeline">
+        <h3>Order Timeline</h3>
+        
+        {% for stage in timeline_stages %}
+        <div class="timeline-item">
+          <div class="timeline-dot {{ stage.status }}"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">{{ stage.title }}</div>
+            {% if stage.date %}
+            <div class="timeline-date">{{ stage.date }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      
+      {% if order_items %}
+      <div class="order-details">
+        <h3>Order Items</h3>
+        {% for item in order_items %}
+        <div class="order-item">
+          <div>
+            <div class="item-name">{{ item.name }}</div>
+            <div class="item-quantity">Quantity: {{ item.quantity }}</div>
+          </div>
+          <div class="item-price">{{ item.price }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      
+      <div class="button-container">
+        <a href="{{ tracking_url }}" class="cta-button">Track Your Order</a>
+      </div>
+      
+      <div class="help-section">
+        <p>Need help with your order?</p>
+        <p>
+          <a href="{{ support_url }}">Contact Support</a> | 
+          <a href="{{ faq_url }}">View FAQ</a>
+        </p>
+      </div>
+    </div>
+    
+    <div class="email-footer">
+      <p><strong>AutoSelect</strong></p>
+      <p>Your trusted partner in vehicle selection</p>
+      
+      <div class="social-links">
+        <a href="{{ facebook_url }}">Facebook</a>
+        <a href="{{ twitter_url }}">Twitter</a>
+        <a href="{{ instagram_url }}">Instagram</a>
+      </div>
+      
+      <p>{{ company_address }}</p>
+      <p>{{ company_phone }} | {{ company_email }}</p>
+      
+      <div class="unsubscribe">
+        <p>
+          You're receiving this email because you placed an order with AutoSelect.<br>
+          <a href="{{ unsubscribe_url }}">Unsubscribe from order updates</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

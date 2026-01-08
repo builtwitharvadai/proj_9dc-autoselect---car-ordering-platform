@@ -5,6 +5,7 @@ import {
   CONFIGURATION_STEP_ORDER,
   CONFIGURATION_STEP_TITLES,
 } from '../../types/configuration';
+import PackageRecommendations from '../Recommendations/PackageRecommendations';
 
 /**
  * Configuration wizard props
@@ -304,6 +305,20 @@ export default function ConfigurationWizard({
     [actions],
   );
 
+  const handlePackageSelect = useCallback(
+    (packageId: string) => {
+      actions.selectPackage(packageId);
+    },
+    [actions],
+  );
+
+  const handlePackageDeselect = useCallback(
+    (packageId: string) => {
+      actions.deselectPackage(packageId);
+    },
+    [actions],
+  );
+
   const renderStepContent = useCallback((): JSX.Element => {
     const stepProps: StepComponentProps = {
       onNext: handleNext,
@@ -339,13 +354,24 @@ export default function ConfigurationWizard({
 
       case 'select-packages':
         return (
-          <div className="rounded-lg border border-gray-200 bg-white p-6">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">
-              Select Packages
-            </h2>
-            <p className="text-gray-600">
-              Package selection component will be rendered here
-            </p>
+          <div className="space-y-6">
+            <div className="rounded-lg border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-xl font-semibold text-gray-900">
+                Select Packages
+              </h2>
+              <p className="text-gray-600">
+                Package selection component will be rendered here
+              </p>
+            </div>
+            <PackageRecommendations
+              vehicleId={vehicleId}
+              trimId={state.selectedTrim?.id}
+              selectedPackageIds={state.selectedPackages.map((pkg) => pkg.id)}
+              selectedOptionIds={state.selectedOptions.map((opt) => opt.id)}
+              onPackageSelect={handlePackageSelect}
+              onPackageDeselect={handlePackageDeselect}
+              showPopularConfigurations={true}
+            />
           </div>
         );
 
@@ -380,7 +406,7 @@ export default function ConfigurationWizard({
           </div>
         );
     }
-  }, [state.currentStep, handleNext, handlePrevious, canProceed, canGoBack]);
+  }, [state.currentStep, state.selectedTrim, state.selectedPackages, state.selectedOptions, vehicleId, handleNext, handlePrevious, canProceed, canGoBack, handlePackageSelect, handlePackageDeselect]);
 
   return (
     <div className={`mx-auto max-w-7xl ${className}`}>

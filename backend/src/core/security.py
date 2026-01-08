@@ -7,6 +7,10 @@ This module provides comprehensive security utilities including:
 - Token expiration and refresh logic
 - Secure random generation
 - Token blacklisting support
+- Rate limiting middleware
+- CORS configuration
+- CSP headers
+- Security audit logging
 
 All operations follow security best practices with proper error handling,
 logging, and validation.
@@ -57,6 +61,11 @@ class TokenError(SecurityError):
 
 class PasswordError(SecurityError):
     """Exception raised for password-related errors."""
+    pass
+
+
+class RateLimitError(SecurityError):
+    """Exception raised for rate limit violations."""
     pass
 
 
@@ -645,3 +654,135 @@ def get_token_user_id(token: str) -> Optional[UUID]:
         
     except (TokenError, ValueError):
         return None
+
+
+def get_cors_config() -> Dict[str, Any]:
+    """
+    Get CORS configuration based on environment.
+    
+    Returns:
+        Dictionary containing CORS configuration
+        
+    Example:
+        >>> config = get_cors_config()
+        >>> "allow_origins" in config
+        True
+    """
+    config = {
+        "allow_origins": settings.cors_origins,
+        "allow_credentials": True,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        "allow_headers": [
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin",
+            "X-Requested-With",
+            "X-CSRF-Token"
+        ],
+        "expose_headers": [
+            "X-Total-Count",
+            "X-Page-Number",
+            "X-Page-Size"
+        ],
+        "max_age": 600
+    }
+    
+    if settings.is_production:
+        config["allow_origins"] = [
+            origin for origin in settings.cors_origins
+            if not origin.startswith("http://localhost")
+        ]
+    
+    logger.info(
+        "CORS configuration loaded",
+        environment=settings.environment,
+        origins_count=len(config["allow_origins"])
+    )
+    
+    return config
+
+
+def get_csp_headers() -> Dict[str, str]:
+    """
+    Get Content Security Policy headers based on environment.
+    
+    Returns:
+        Dictionary containing CSP headers
+        
+    Example:
+        >>> headers = get_csp_headers()
+        >>> "Content-Security-Policy" in headers
+        True
+    """
+    if not settings.csp_enabled:
+        return {}
+    
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'"
+    ]
+    
+    if settings.is_development:
+        csp_directives.append("upgrade-insecure-requests")
+    
+    headers = {
+        "Content-Security-Policy": "; ".join(csp_directives),
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
+    }
+    
+    if settings.is_production:
+        headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    logger.debug(
+        "CSP headers generated",
+        environment=settings.environment,
+        headers_count=len(headers)
+    )
+    
+    return headers
+
+
+def log_security_event(
+    event_type: str,
+    user_id: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    **context
+) -> None:
+    """
+    Log security-related events for audit trail.
+    
+    Args:
+        event_type: Type of security event
+        user_id: Optional user identifier
+        ip_address: Optional IP address
+        **context: Additional context information
+        
+    Example:
+        >>> log_security_event(
+        ...     "login_attempt",
+        ...     user_id="user123",
+        ...     ip_address="192.168.1.1",
+        ...     success=True
+        ... )
+    """
+    logger.info(
+        "Security event",
+        event_type=event_type,
+        user_id=user_id,
+        ip_address=ip_address,
+        timestamp=datetime.utcnow().isoformat(),
+        environment=settings.environment,
+        **context
+    )

@@ -251,6 +251,17 @@ class Settings(BaseSettings):
         description="Enable automated notification system",
     )
 
+    # Security Hardening Configuration
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Enable rate limiting for API endpoints",
+    )
+
+    csp_enabled: bool = Field(
+        default=True,
+        description="Enable Content Security Policy headers",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:

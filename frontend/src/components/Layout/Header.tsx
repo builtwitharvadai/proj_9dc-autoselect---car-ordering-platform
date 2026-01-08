@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useComparison } from '../../hooks/useComparison';
 
 interface NavigationLink {
   readonly label: string;
@@ -22,6 +23,7 @@ export default function Header({ className = '' }: HeaderProps): JSX.Element {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const location = useLocation();
+  const { count, getComparisonUrl, canCompare } = useComparison();
 
   useEffect(() => {
     const handleScroll = (): void => {
@@ -123,6 +125,41 @@ export default function Header({ className = '' }: HeaderProps): JSX.Element {
           </div>
 
           <div className="hidden md:flex md:items-center md:space-x-4">
+            {count > 0 && (
+              <Link
+                to={getComparisonUrl()}
+                className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors duration-[var(--transition-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--color-primary-600))] ${
+                  canCompare
+                    ? 'text-[rgb(var(--color-primary-700))] hover:bg-[rgb(var(--color-primary-50))]'
+                    : 'text-[rgb(var(--color-gray-500))] cursor-not-allowed'
+                }`}
+                aria-label={`Compare ${count} vehicle${count !== 1 ? 's' : ''}`}
+                aria-disabled={!canCompare}
+              >
+                <svg
+                  className="h-5 w-5 mr-2"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+                Compare
+                <span
+                  className="ml-2 inline-flex items-center justify-center h-5 w-5 text-xs font-bold text-white bg-[rgb(var(--color-primary-600))] rounded-full"
+                  aria-label={`${count} vehicles selected`}
+                >
+                  {count}
+                </span>
+              </Link>
+            )}
             <Link
               to="/login"
               className="inline-flex items-center px-4 py-2 text-sm font-medium text-[rgb(var(--color-gray-700))] hover:text-[rgb(var(--color-gray-900))] rounded-[var(--radius-md)] transition-colors duration-[var(--transition-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--color-primary-600))]"
@@ -252,6 +289,43 @@ export default function Header({ className = '' }: HeaderProps): JSX.Element {
                     </Link>
                   );
                 })}
+                {count > 0 && (
+                  <Link
+                    to={getComparisonUrl()}
+                    className={`flex items-center justify-between px-4 py-3 text-base font-medium rounded-[var(--radius-md)] transition-colors duration-[var(--transition-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--color-primary-600))] ${
+                      canCompare
+                        ? 'text-[rgb(var(--color-primary-700))] bg-[rgb(var(--color-primary-50))]'
+                        : 'text-[rgb(var(--color-gray-500))] bg-[rgb(var(--color-gray-50))] cursor-not-allowed'
+                    }`}
+                    aria-label={`Compare ${count} vehicle${count !== 1 ? 's' : ''}`}
+                    aria-disabled={!canCompare}
+                  >
+                    <span className="flex items-center">
+                      <svg
+                        className="h-5 w-5 mr-2"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                        />
+                      </svg>
+                      Compare
+                    </span>
+                    <span
+                      className="inline-flex items-center justify-center h-6 w-6 text-xs font-bold text-white bg-[rgb(var(--color-primary-600))] rounded-full"
+                      aria-label={`${count} vehicles selected`}
+                    >
+                      {count}
+                    </span>
+                  </Link>
+                )}
               </nav>
 
               <div className="border-t border-[rgb(var(--color-gray-200))] px-4 py-6 space-y-3">

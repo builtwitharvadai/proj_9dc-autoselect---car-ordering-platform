@@ -12,6 +12,7 @@ interface NavigationLink {
 const NAVIGATION_LINKS: readonly NavigationLink[] = [
   { label: 'Home', path: '/', ariaLabel: 'Navigate to home page' },
   { label: 'Browse', path: '/browse', ariaLabel: 'Browse available vehicles' },
+  { label: 'Orders', path: '/orders', ariaLabel: 'View your orders' },
   { label: 'About', path: '/about', ariaLabel: 'Learn about AutoSelect' },
   { label: 'Contact', path: '/contact', ariaLabel: 'Contact us' },
 ] as const;

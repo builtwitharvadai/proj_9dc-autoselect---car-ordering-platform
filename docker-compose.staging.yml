@@ -1,0 +1,176 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      cache_from:
+        - backend:latest
+    image: autoselect-backend:latest
+    container_name: autoselect-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/autoselect
+      - REDIS_URL=redis://redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENVIRONMENT=development
+      - LOG_LEVEL=info
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      - ./backend:/app/backend:ro
+      - backend-static:/app/backend/static
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - autoselect-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      cache_from:
+        - frontend:latest
+    image: autoselect-frontend:latest
+    container_name: autoselect-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/src:/app/frontend/src:ro
+      - ./frontend/public:/app/frontend/public:ro
+    depends_on:
+      - backend
+    networks:
+      - autoselect-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: autoselect-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=autoselect
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=en_US.utf8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - autoselect-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autoselect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: autoselect-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - autoselect-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: autoselect-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - autoselect-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: autoselect-backend:latest
+    container_name: autoselect-celery-worker
+    restart: unless-stopped
+    command: celery -A src.services.notifications.tasks worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/autoselect
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      - ./backend:/app/backend:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - autoselect-network
+
+networks:
+  autoselect-network:
+    driver: bridge
+    name: autoselect-network
+
+volumes:
+  postgres-data:
+    driver: local
+    name: autoselect-postgres-data
+  redis-data:
+    driver: local
+    name: autoselect-redis-data
+  elasticsearch-data:
+    driver: local
+    name: autoselect-elasticsearch-data
+  backend-static:
+    driver: local
+    name: autoselect-backend-static

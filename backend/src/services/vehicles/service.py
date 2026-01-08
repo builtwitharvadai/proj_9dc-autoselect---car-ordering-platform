@@ -77,6 +77,7 @@ class VehicleService:
         session: AsyncSession,
         cache_client: Optional[RedisClient] = None,
         cache_ttl: int = 3600,
+        search_service: Optional[Any] = None,
     ):
         """
         Initialize vehicle service.
@@ -85,17 +86,20 @@ class VehicleService:
             session: Async database session
             cache_client: Optional Redis cache client
             cache_ttl: Cache TTL in seconds (default: 1 hour)
+            search_service: Optional Elasticsearch search service
         """
         self.repository = VehicleRepository(session)
         self.session = session
         self.cache_client = cache_client
         self.cache_ttl = cache_ttl
         self.cache_key_manager = CacheKeyManager()
+        self.search_service = search_service
 
         logger.info(
             "Vehicle service initialized",
             cache_enabled=cache_client is not None,
             cache_ttl=cache_ttl,
+            search_enabled=search_service is not None,
         )
 
     async def create_vehicle(self, vehicle_data: VehicleCreate) -> VehicleResponse:
@@ -142,6 +146,11 @@ class VehicleService:
             if self.cache_client:
                 await self._invalidate_list_cache()
 
+            response = self._to_response(created_vehicle)
+
+            if self.search_service:
+                await self._sync_to_search_index(response)
+
             logger.info(
                 "Vehicle created successfully",
                 vehicle_id=str(created_vehicle.id),
@@ -150,7 +159,7 @@ class VehicleService:
                 year=created_vehicle.year,
             )
 
-            return self._to_response(created_vehicle)
+            return response
 
         except IntegrityError as e:
             await self.session.rollback()
@@ -312,13 +321,18 @@ class VehicleService:
                 await self._invalidate_vehicle_cache(vehicle_id)
                 await self._invalidate_list_cache()
 
+            response = self._to_response(updated_vehicle)
+
+            if self.search_service:
+                await self._sync_to_search_index(response)
+
             logger.info(
                 "Vehicle updated successfully",
                 vehicle_id=str(vehicle_id),
                 updated_fields=list(update_data.keys()),
             )
 
-            return self._to_response(updated_vehicle)
+            return response
 
         except VehicleNotFoundError:
             raise
@@ -378,6 +392,9 @@ class VehicleService:
             if self.cache_client:
                 await self._invalidate_vehicle_cache(vehicle_id)
                 await self._invalidate_list_cache()
+
+            if self.search_service:
+                await self._remove_from_search_index(vehicle_id)
 
             logger.info(
                 "Vehicle deleted successfully",
@@ -639,6 +656,204 @@ class VehicleService:
                 error_type=type(e).__name__,
             )
             raise
+
+    async def bulk_index_vehicles(
+        self,
+        batch_size: int = 100,
+    ) -> dict[str, int]:
+        """
+        Bulk index all active vehicles to Elasticsearch.
+
+        Args:
+            batch_size: Number of vehicles to process per batch
+
+        Returns:
+            Dictionary with indexing statistics
+
+        Raises:
+            VehicleServiceError: If bulk indexing fails
+        """
+        if not self.search_service:
+            logger.warning("Search service not configured, skipping bulk indexing")
+            return {"indexed": 0, "failed": 0, "skipped": 0}
+
+        try:
+            indexed_count = 0
+            failed_count = 0
+            offset = 0
+
+            logger.info("Starting bulk vehicle indexing", batch_size=batch_size)
+
+            while True:
+                vehicles, total = await self.repository.search(
+                    available_only=False,
+                    skip=offset,
+                    limit=batch_size,
+                )
+
+                if not vehicles:
+                    break
+
+                batch_responses = []
+                for vehicle in vehicles:
+                    try:
+                        response = self._to_response(vehicle)
+                        batch_responses.append(response)
+                    except Exception as e:
+                        logger.error(
+                            "Failed to convert vehicle to response",
+                            vehicle_id=str(vehicle.id),
+                            error=str(e),
+                        )
+                        failed_count += 1
+
+                if batch_responses:
+                    try:
+                        await self._bulk_sync_to_search_index(batch_responses)
+                        indexed_count += len(batch_responses)
+                        logger.info(
+                            "Indexed vehicle batch",
+                            batch_size=len(batch_responses),
+                            total_indexed=indexed_count,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "Failed to index vehicle batch",
+                            batch_size=len(batch_responses),
+                            error=str(e),
+                        )
+                        failed_count += len(batch_responses)
+
+                offset += batch_size
+
+                if offset >= total:
+                    break
+
+            logger.info(
+                "Bulk vehicle indexing completed",
+                indexed=indexed_count,
+                failed=failed_count,
+                total=total,
+            )
+
+            return {
+                "indexed": indexed_count,
+                "failed": failed_count,
+                "skipped": 0,
+            }
+
+        except Exception as e:
+            logger.error(
+                "Bulk vehicle indexing failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise VehicleServiceError(
+                "Failed to bulk index vehicles",
+                code="VEHICLE_BULK_INDEX_ERROR",
+                error=str(e),
+            ) from e
+
+    async def _sync_to_search_index(self, vehicle: VehicleResponse) -> None:
+        """
+        Sync single vehicle to Elasticsearch index.
+
+        Args:
+            vehicle: Vehicle response to index
+        """
+        if not self.search_service:
+            return
+
+        try:
+            from src.services.search.vehicle_index import VehicleIndex
+
+            vehicle_index = VehicleIndex()
+            document = vehicle_index.prepare_document(vehicle)
+
+            await self.search_service._index.index_vehicle(
+                vehicle_id=str(vehicle.id),
+                document=document,
+            )
+
+            logger.debug(
+                "Vehicle synced to search index",
+                vehicle_id=str(vehicle.id),
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to sync vehicle to search index",
+                vehicle_id=str(vehicle.id),
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+    async def _bulk_sync_to_search_index(
+        self,
+        vehicles: list[VehicleResponse],
+    ) -> None:
+        """
+        Bulk sync vehicles to Elasticsearch index.
+
+        Args:
+            vehicles: List of vehicle responses to index
+        """
+        if not self.search_service:
+            return
+
+        try:
+            from src.services.search.vehicle_index import VehicleIndex
+
+            vehicle_index = VehicleIndex()
+            documents = []
+
+            for vehicle in vehicles:
+                document = vehicle_index.prepare_document(vehicle)
+                documents.append({
+                    "id": str(vehicle.id),
+                    "document": document,
+                })
+
+            await self.search_service._index.bulk_index_vehicles(documents)
+
+            logger.debug(
+                "Vehicles bulk synced to search index",
+                count=len(vehicles),
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to bulk sync vehicles to search index",
+                count=len(vehicles),
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+    async def _remove_from_search_index(self, vehicle_id: uuid.UUID) -> None:
+        """
+        Remove vehicle from Elasticsearch index.
+
+        Args:
+            vehicle_id: Vehicle identifier to remove
+        """
+        if not self.search_service:
+            return
+
+        try:
+            await self.search_service._index.delete_vehicle(str(vehicle_id))
+
+            logger.debug(
+                "Vehicle removed from search index",
+                vehicle_id=str(vehicle_id),
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to remove vehicle from search index",
+                vehicle_id=str(vehicle_id),
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
     async def _validate_vehicle_uniqueness(
         self,

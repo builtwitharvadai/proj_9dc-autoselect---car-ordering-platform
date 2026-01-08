@@ -11,6 +11,8 @@ import ComparisonPage from './components/VehicleComparison/ComparisonPage';
 import Configure from './pages/Configure';
 import SavedConfigurations from './pages/SavedConfigurations';
 import ConfigurationManagement from './pages/Dealer/ConfigurationManagement';
+import Orders from './pages/Orders';
+import OrderDetailPage from './components/OrderTracking/OrderDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -196,6 +198,8 @@ const App: React.FC = () => {
                 <Route path="/compare" element={<ComparisonPage />} />
                 <Route path="/saved-configurations" element={<SavedConfigurations />} />
                 <Route path="/shared/:token" element={<SharedConfiguration />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                 <Route path="/dealer/configuration" element={<ConfigurationManagement />} />
                 <Route path="/dealer/configuration/options" element={<ConfigurationManagement />} />
                 <Route path="/dealer/configuration/packages" element={<ConfigurationManagement />} />

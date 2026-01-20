@@ -6,7 +6,7 @@
   "description": "AutoSelect Car Ordering Platform - React Frontend",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",

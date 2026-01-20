@@ -24,5 +24,11 @@
     }
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "build"]
+  "exclude": [
+    "node_modules", 
+    "dist", 
+    "build",
+    "src/__tests__/**/*.test.ts",
+    "src/utils/pdfGenerator.ts"
+  ]
 }

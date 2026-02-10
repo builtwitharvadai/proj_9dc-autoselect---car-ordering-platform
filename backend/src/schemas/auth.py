@@ -473,3 +473,49 @@ class PasswordResetConfirm(BaseModel):
             ]
         }
     }
+
+
+class MessageResponse(BaseModel):
+    """
+    Schema for simple message responses.
+    """
+    
+    message: str = Field(
+        ...,
+        description="Response message",
+        examples=["Operation completed successfully"]
+    )
+    success: bool = Field(
+        default=True,
+        description="Whether the operation was successful"
+    )
+
+
+class TokenPayload(BaseModel):
+    """
+    Schema for JWT token payload data.
+    """
+    
+    sub: str = Field(
+        ...,
+        description="Subject (user ID)"
+    )
+    exp: Optional[int] = Field(
+        None,
+        description="Expiration timestamp"
+    )
+    iat: Optional[int] = Field(
+        None,
+        description="Issued at timestamp"
+    )
+    type: Optional[str] = Field(
+        None,
+        description="Token type (access or refresh)"
+    )
+
+
+# Type aliases for backward compatibility
+UserRegisterRequest = UserCreate
+UserLoginRequest = UserLogin
+TokenRefreshRequest = TokenRefresh
+UserProfileResponse = UserResponse

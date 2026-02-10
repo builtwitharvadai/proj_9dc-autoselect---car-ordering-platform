@@ -22,6 +22,8 @@ import type {
   FulfillmentActionResponse,
   BulkOrderOperationRequest,
   BulkOrderOperationResponse,
+  BulkOrderOperationType,
+  FulfillmentActionType,
   DealerOrderStatus,
 } from '../types/dealer';
 
@@ -450,5 +452,7 @@ export type {
   FulfillmentActionResponse,
   BulkOrderOperationRequest,
   BulkOrderOperationResponse,
+  BulkOrderOperationType,
+  FulfillmentActionType,
   DealerOrderStatus,
 };

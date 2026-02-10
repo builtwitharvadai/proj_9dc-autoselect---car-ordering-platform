@@ -344,3 +344,7 @@ async def initialize_database() -> None:
             error_type=type(e).__name__,
         )
         raise RuntimeError(f"Failed to initialize database: {e}") from e
+
+
+# Alias for get_session - used in main.py and other modules
+get_db_session = get_session

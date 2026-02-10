@@ -164,7 +164,7 @@ class Payment(AuditedModel):
         failure_code: Payment failure code if failed
         failure_message: Payment failure message if failed
         refund_amount: Total amount refunded
-        metadata: Additional payment metadata (JSONB)
+        extra_data: Additional payment metadata (JSONB)
         created_at: Record creation timestamp (from AuditedModel)
         updated_at: Last modification timestamp (from AuditedModel)
         created_by: User who created this record (from AuditedModel)
@@ -273,7 +273,7 @@ class Payment(AuditedModel):
     )
 
     # Additional metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(
+    extra_data: Mapped[Optional[dict]] = mapped_column(
         JSONB,
         nullable=True,
         comment="Additional payment metadata",
@@ -594,34 +594,34 @@ class Payment(AuditedModel):
             new_status=self.status.value,
         )
 
-    def set_metadata_value(self, key: str, value: Any) -> None:
+    def set_extra_data_value(self, key: str, value: Any) -> None:
         """
-        Set metadata value.
+        Set extra data value.
 
         Args:
-            key: Metadata key
-            value: Metadata value
+            key: Extra data key
+            value: Extra data value
         """
-        if self.metadata is None:
-            self.metadata = {}
+        if self.extra_data is None:
+            self.extra_data = {}
 
-        self.metadata[key] = value
+        self.extra_data[key] = value
 
-    def get_metadata_value(self, key: str, default: Any = None) -> Any:
+    def get_extra_data_value(self, key: str, default: Any = None) -> Any:
         """
-        Get metadata value.
+        Get extra data value.
 
         Args:
-            key: Metadata key
+            key: Extra data key
             default: Default value if key not found
 
         Returns:
-            Metadata value or default
+            Extra data value or default
         """
-        if self.metadata is None:
+        if self.extra_data is None:
             return default
 
-        return self.metadata.get(key, default)
+        return self.extra_data.get(key, default)
 
     def to_dict(self, include_sensitive: bool = False) -> dict[str, Any]:
         """
@@ -654,7 +654,7 @@ class Payment(AuditedModel):
             "is_partially_refunded": self.is_partially_refunded,
             "failure_code": self.failure_code,
             "failure_message": self.failure_message,
-            "metadata": self.metadata,
+            "extra_data": self.extra_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -680,7 +680,7 @@ class PaymentStatusHistory(AuditedModel):
         from_status: Previous payment status
         to_status: New payment status
         reason: Reason for status change
-        metadata: Additional context (JSONB)
+        extra_data: Additional context (JSONB)
         created_at: Record creation timestamp (from AuditedModel)
         updated_at: Last modification timestamp (from AuditedModel)
         created_by: User who created this record (from AuditedModel)
@@ -726,7 +726,7 @@ class PaymentStatusHistory(AuditedModel):
         comment="Reason for status change",
     )
 
-    metadata: Mapped[Optional[dict]] = mapped_column(
+    extra_data: Mapped[Optional[dict]] = mapped_column(
         JSONB,
         nullable=True,
         comment="Additional context",
@@ -785,7 +785,7 @@ class PaymentStatusHistory(AuditedModel):
             "from_status": self.from_status.value if self.from_status else None,
             "to_status": self.to_status.value,
             "reason": self.reason,
-            "metadata": self.metadata,
+            "extra_data": self.extra_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "created_by": self.created_by,
         }

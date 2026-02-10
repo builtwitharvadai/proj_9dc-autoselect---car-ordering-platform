@@ -12,8 +12,8 @@ import type {
   DealerOrderStatus,
   FulfillmentActionType,
   FulfillmentActionRequest,
-} from '../../types/dealer';
-import { useOrderFulfillment } from '../../hooks/useDealerOrders';
+} from '../../../types/dealer';
+import { useOrderFulfillment } from '../../../hooks/useDealerOrders';
 
 /**
  * Props for FulfillmentControls component

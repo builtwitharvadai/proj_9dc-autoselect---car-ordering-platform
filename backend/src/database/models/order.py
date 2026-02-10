@@ -1023,7 +1023,7 @@ class OrderStatusHistory(AuditedModel):
         to_status: New status
         changed_by: User who made the change
         change_reason: Reason for status change
-        metadata: Additional metadata stored as JSONB
+        extra_data: Additional metadata stored as JSONB
         created_at: Record creation timestamp (from AuditedModel)
         updated_at: Last modification timestamp (from AuditedModel)
         created_by: User who created this record (from AuditedModel)
@@ -1076,7 +1076,7 @@ class OrderStatusHistory(AuditedModel):
         comment="Reason for status change",
     )
 
-    metadata: Mapped[dict[str, Any]] = mapped_column(
+    extra_data: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -1108,8 +1108,8 @@ class OrderStatusHistory(AuditedModel):
             "to_status",
         ),
         Index(
-            "ix_order_status_history_metadata_gin",
-            "metadata",
+            "ix_order_status_history_extra_data_gin",
+            "extra_data",
             postgresql_using="gin",
         ),
         {

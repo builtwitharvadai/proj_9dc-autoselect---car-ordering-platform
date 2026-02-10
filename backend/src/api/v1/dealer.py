@@ -14,6 +14,7 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Path,
     Query,
     UploadFile,
     status,
@@ -343,7 +344,7 @@ async def update_inventory_item(
     db: DatabaseSession,
     inventory_id: Annotated[
         uuid.UUID,
-        Query(description="Inventory item unique identifier"),
+        Path(description="Inventory item unique identifier"),
     ],
     dealer_id: Annotated[
         uuid.UUID,

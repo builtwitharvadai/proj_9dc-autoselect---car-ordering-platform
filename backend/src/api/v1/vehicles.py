@@ -416,14 +416,14 @@ async def search_vehicles(
 )
 async def get_search_suggestions(
     response: Response,
+    search_service: Annotated[VehicleSearchService, Depends(get_search_service)],
+    current_user: OptionalUser,
     query: Annotated[str, Query(min_length=2, max_length=100, description="Search prefix")],
     field: Annotated[
         str,
         Query(pattern="^(make|model|body_style)$", description="Field to get suggestions for")
     ] = "make",
     limit: Annotated[int, Query(ge=1, le=20, description="Maximum suggestions")] = 5,
-    search_service: Annotated[VehicleSearchService, Depends(get_search_service)],
-    current_user: OptionalUser,
 ) -> SearchSuggestionResponse:
     """
     Get search suggestions for autocomplete.

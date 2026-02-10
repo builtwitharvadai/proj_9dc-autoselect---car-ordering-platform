@@ -309,12 +309,12 @@ class BaseModel(Base, UUIDMixin, TimestampMixin):
     __abstract__ = True
 
 
-class AuditedModel(Base, UUIDMixin, AuditMixin):
+class AuditedModel(Base, UUIDMixin, AuditMixin, SoftDeleteMixin):
     """
-    Base model with UUID, timestamps, and audit fields.
+    Base model with UUID, timestamps, audit fields, and soft delete.
 
-    Combines Base, UUIDMixin, and AuditMixin for models that
-    require full audit trail capabilities.
+    Combines Base, UUIDMixin, AuditMixin, and SoftDeleteMixin for models that
+    require full audit trail capabilities with soft delete support.
 
     Example:
         class Order(AuditedModel):

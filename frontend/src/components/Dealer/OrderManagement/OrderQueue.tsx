@@ -23,8 +23,8 @@ import {
   type DealerOrder,
   type DealerOrderStatus,
   type BulkOrderOperationType,
-} from '../../hooks/useDealerOrders';
-import { useWebSocket } from '../../hooks/useWebSocket';
+} from '../../../hooks/useDealerOrders';
+import { useWebSocket } from '../../../hooks/useWebSocket';
 
 /**
  * Component props interface

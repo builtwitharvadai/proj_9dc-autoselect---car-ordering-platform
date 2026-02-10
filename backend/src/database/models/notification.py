@@ -159,7 +159,7 @@ class NotificationLog(BaseModel):
         delivered_at: Timestamp when delivery was confirmed
         error_message: Error details if delivery failed
         retry_count: Number of retry attempts
-        metadata: Additional notification metadata (JSON)
+        extra_data: Additional notification metadata (JSON)
         created_at: Record creation timestamp (from BaseModel)
         updated_at: Last modification timestamp (from BaseModel)
     """
@@ -242,8 +242,8 @@ class NotificationLog(BaseModel):
         comment="Number of retry attempts",
     )
 
-    # Additional metadata
-    metadata: Mapped[Optional[str]] = mapped_column(
+    # Additional notification data
+    extra_data: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
         comment="Additional notification metadata (JSON)",

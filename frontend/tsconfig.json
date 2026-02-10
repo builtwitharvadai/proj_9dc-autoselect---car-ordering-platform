@@ -29,6 +29,6 @@
     "dist", 
     "build",
     "src/__tests__/**/*.test.ts",
-    "src/utils/pdfGenerator.ts"
+    "src/utils/pdfGenerator.tsx"
   ]
 }

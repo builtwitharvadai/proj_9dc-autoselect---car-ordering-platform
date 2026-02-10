@@ -24,7 +24,7 @@ import BulkOperations from '../../components/Dealer/OrderManagement/BulkOperatio
 import FulfillmentControls from '../../components/Dealer/OrderManagement/FulfillmentControls';
 import {
   useDealerOrders,
-  useOrderDetail,
+  useDealerOrderDetail,
   type DealerOrder,
   type DealerOrderDetail,
   type FulfillmentActionType,
@@ -114,7 +114,7 @@ export default function OrderManagement({
     isLoading: isLoadingDetail,
     error: detailError,
     refetch: refetchDetail,
-  } = useOrderDetail(selectedOrderId ?? '', {
+  } = useDealerOrderDetail(selectedOrderId ?? '', {
     enabled: selectedOrderId !== null,
   });
 

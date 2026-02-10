@@ -280,3 +280,19 @@ CurrentAdmin = Annotated[User, Depends(get_current_admin)]
 CurrentDealer = Annotated[User, Depends(get_current_dealer)]
 OptionalUser = Annotated[Optional[User], Depends(get_optional_user)]
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+async def get_auth_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Get AuthService instance with database session.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        AuthService: Authentication service instance
+    """
+    from src.services.auth.service import AuthService
+    return AuthService(db)

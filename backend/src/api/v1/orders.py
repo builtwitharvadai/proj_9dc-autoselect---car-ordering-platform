@@ -981,12 +981,12 @@ async def fulfill_order(
     description="Perform bulk operations on multiple orders",
 )
 async def bulk_order_operations(
+    current_user: CurrentActiveUser,
+    db: DatabaseSession,
     order_ids: List[UUID],
     operation: str = Query(..., description="Operation to perform: update_status"),
     new_status: Optional[OrderStatus] = Query(None, description="New status for orders"),
     notes: Optional[str] = Query(None, max_length=500, description="Operation notes"),
-    current_user: CurrentActiveUser = Depends(get_current_active_user),
-    db: DatabaseSession = Depends(),
 ) -> dict:
     """
     Perform bulk operations on multiple orders.

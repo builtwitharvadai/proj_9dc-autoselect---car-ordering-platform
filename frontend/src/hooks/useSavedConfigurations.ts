@@ -20,6 +20,8 @@ import type {
   ShareConfigurationResponse,
   SavedConfigurationListRequest,
   SavedConfigurationListResponse,
+  ConfigurationComparisonRequest,
+  ConfigurationComparisonResult,
 } from '../types/savedConfiguration';
 
 /**
@@ -38,6 +40,7 @@ const ENDPOINTS = {
     `${API_BASE_URL}/api/${API_VERSION}/saved-configurations/${id}`,
   shareConfiguration: (id: string) =>
     `${API_BASE_URL}/api/${API_VERSION}/saved-configurations/${id}/share`,
+  compareConfigurations: `${API_BASE_URL}/api/${API_VERSION}/saved-configurations/compare`,
 } as const;
 
 /**
@@ -51,6 +54,7 @@ export const savedConfigurationKeys = {
   details: () => [...savedConfigurationKeys.all, 'detail'] as const,
   detail: (id: string) => [...savedConfigurationKeys.details(), id] as const,
   shared: (token: string) => [...savedConfigurationKeys.all, 'shared', token] as const,
+  comparison: (ids: readonly string[]) => [...savedConfigurationKeys.all, 'comparison', ids] as const,
 } as const;
 
 /**
@@ -645,6 +649,86 @@ export function useShareConfiguration(
 }
 
 /**
+ * Fetch configuration comparison data
+ */
+async function fetchCompareConfigurations(
+  request: ConfigurationComparisonRequest,
+): Promise<ConfigurationComparisonResult> {
+  const controller = createAbortController();
+
+  try {
+    const response = await fetch(ENDPOINTS.compareConfigurations, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      credentials: 'include',
+      signal: controller.signal,
+      body: JSON.stringify(request),
+    });
+
+    clearTimeout(
+      (controller.signal as AbortSignal & { timeoutId?: NodeJS.Timeout }).timeoutId,
+    );
+
+    if (!response.ok) {
+      const errorData: unknown = await response.json().catch(() => ({}));
+      if (isApiErrorResponse(errorData)) {
+        throw new SavedConfigurationApiError(
+          errorData.message,
+          errorData.statusCode,
+          errorData.details,
+        );
+      }
+      throw new SavedConfigurationApiError(
+        `Failed to compare configurations: ${response.statusText}`,
+        response.status,
+      );
+    }
+
+    const data: ConfigurationComparisonResult = await response.json() as ConfigurationComparisonResult;
+    return data;
+  } catch (error) {
+    clearTimeout(
+      (controller.signal as AbortSignal & { timeoutId?: NodeJS.Timeout }).timeoutId,
+    );
+
+    if (error instanceof SavedConfigurationApiError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new SavedConfigurationApiError('Request timed out', 408);
+    }
+
+    throw new SavedConfigurationApiError(
+      error instanceof Error ? error.message : 'Unknown error occurred',
+      500,
+    );
+  }
+}
+
+/**
+ * Hook to compare multiple saved configurations
+ * @param request - Configuration comparison request with IDs to compare
+ * @param options - Additional React Query options
+ */
+export function useCompareConfigurations(
+  request: ConfigurationComparisonRequest,
+  options?: Omit<
+    UseQueryOptions<ConfigurationComparisonResult, SavedConfigurationApiError>,
+    'queryKey' | 'queryFn'
+  >,
+) {
+  return useQuery({
+    queryKey: savedConfigurationKeys.comparison(request.configurationIds),
+    queryFn: () => fetchCompareConfigurations(request),
+    ...options,
+  });
+}
+
+/**
  * Hook to prefetch saved configurations
  */
 export function usePrefetchSavedConfigurations() {
@@ -706,4 +790,6 @@ export type {
   ShareConfigurationResponse,
   SavedConfigurationListRequest,
   SavedConfigurationListResponse,
+  ConfigurationComparisonRequest,
+  ConfigurationComparisonResult,
 };

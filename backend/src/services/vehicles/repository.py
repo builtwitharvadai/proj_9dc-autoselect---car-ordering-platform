@@ -18,7 +18,8 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from src.core.logging import get_logger
-from src.database.models.vehicle import Vehicle, VehicleConfiguration
+from src.database.models.vehicle import Vehicle
+from src.database.models.vehicle_configuration import VehicleConfiguration
 from src.database.models.inventory import InventoryItem, InventoryStatus
 
 logger = get_logger(__name__)

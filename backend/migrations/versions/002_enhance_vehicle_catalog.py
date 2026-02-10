@@ -186,18 +186,18 @@ def upgrade() -> None:
         'inventory_items',
         sa.Column(
             'availability_status',
-            sa.Enum(
-                'AVAILABLE',
-                'LOW_STOCK',
-                'OUT_OF_STOCK',
-                'DISCONTINUED',
-                name='availabilitystatus',
-                create_type=True,
-            ),
+            sa.String(50),
             nullable=False,
             server_default='AVAILABLE',
-            comment='Catalog availability status',
+            comment='Catalog availability status (AVAILABLE, LOW_STOCK, OUT_OF_STOCK, DISCONTINUED)',
         )
+    )
+    
+    # Add check constraint for availability_status
+    op.create_check_constraint(
+        'ck_inventory_availability_status',
+        'inventory_items',
+        "availability_status IN ('AVAILABLE', 'LOW_STOCK', 'OUT_OF_STOCK', 'DISCONTINUED')"
     )
     
     op.add_column(
@@ -418,6 +418,11 @@ def downgrade() -> None:
     )
     
     # Drop inventory_items columns
+    op.drop_constraint(
+        'ck_inventory_availability_status',
+        'inventory_items',
+        type_='check',
+    )
     op.drop_column('inventory_items', 'expected_restock_date')
     op.drop_column('inventory_items', 'last_restocked_at')
     op.drop_column('inventory_items', 'reorder_quantity')
@@ -426,9 +431,6 @@ def downgrade() -> None:
     op.drop_column('inventory_items', 'reserved_quantity')
     op.drop_column('inventory_items', 'stock_quantity')
     op.drop_column('inventory_items', 'availability_status')
-    
-    # Drop availability status enum type
-    sa.Enum(name='availabilitystatus').drop(op.get_bind(), checkfirst=True)
     
     # Drop vehicles constraints
     op.drop_constraint(

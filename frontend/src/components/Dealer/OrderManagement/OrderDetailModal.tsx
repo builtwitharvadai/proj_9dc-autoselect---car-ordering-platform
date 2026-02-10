@@ -23,8 +23,8 @@ import type {
   DealerOrderDetail,
   DealerOrderStatus,
   FulfillmentActionType,
-} from '../../types/dealer';
-import { useOrderFulfillment } from '../../hooks/useDealerOrders';
+} from '../../../types/dealer';
+import { useOrderFulfillment } from '../../../hooks/useDealerOrders';
 
 /**
  * Props for OrderDetailModal component

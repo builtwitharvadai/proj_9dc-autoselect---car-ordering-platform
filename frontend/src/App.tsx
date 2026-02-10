@@ -3,7 +3,6 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ComparisonProvider } from './contexts/ComparisonContext';
-import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import { CartProvider } from './contexts/CartContext';
 import Browse from './pages/Browse';
 import VehicleDetailPage from './components/VehicleDetail/VehicleDetailPage';
@@ -27,51 +26,43 @@ const queryClient = new QueryClient({
   },
 });
 
-const Cart: React.FC = () => {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
-      <h2 className="mb-4 text-2xl font-bold text-gray-900">Shopping Cart</h2>
-      <p className="text-gray-600">
-        Review your selections and proceed to checkout.
-      </p>
-    </div>
-  );
-};
+const Cart: React.FC = () => (
+  <div className="rounded-lg bg-white p-6 shadow">
+    <h2 className="mb-4 text-2xl font-bold text-gray-900">Shopping Cart</h2>
+    <p className="text-gray-600">
+      Review your selections and proceed to checkout.
+    </p>
+  </div>
+);
 
-const Track: React.FC = () => {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
-      <h2 className="mb-4 text-2xl font-bold text-gray-900">Track Order</h2>
-      <p className="text-gray-600">
-        Monitor the status of your vehicle order and delivery.
-      </p>
-    </div>
-  );
-};
+const Track: React.FC = () => (
+  <div className="rounded-lg bg-white p-6 shadow">
+    <h2 className="mb-4 text-2xl font-bold text-gray-900">Track Order</h2>
+    <p className="text-gray-600">
+      Monitor the status of your vehicle order and delivery.
+    </p>
+  </div>
+);
 
-const Home: React.FC = () => {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
-      <h2 className="mb-4 text-xl font-semibold text-gray-800">
-        Welcome to AutoSelect
-      </h2>
-      <p className="text-gray-600">
-        Your modern car ordering platform is ready for development.
-      </p>
-    </div>
-  );
-};
+const Home: React.FC = () => (
+  <div className="rounded-lg bg-white p-6 shadow">
+    <h2 className="mb-4 text-xl font-semibold text-gray-800">
+      Welcome to AutoSelect
+    </h2>
+    <p className="text-gray-600">
+      Your modern car ordering platform is ready for development.
+    </p>
+  </div>
+);
 
-const SharedConfiguration: React.FC = () => {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
-      <h2 className="mb-4 text-2xl font-bold text-gray-900">Shared Configuration</h2>
-      <p className="text-gray-600">
-        Loading shared configuration...
-      </p>
-    </div>
-  );
-};
+const SharedConfiguration: React.FC = () => (
+  <div className="rounded-lg bg-white p-6 shadow">
+    <h2 className="mb-4 text-2xl font-bold text-gray-900">Shared Configuration</h2>
+    <p className="text-gray-600">
+      Loading shared configuration...
+    </p>
+  </div>
+);
 
 interface NavLinkProps {
   to: string;

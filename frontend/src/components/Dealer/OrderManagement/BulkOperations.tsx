@@ -22,8 +22,8 @@ import {
   type BulkOrderOperationResponse,
   type BulkOrderOperationType,
   type DealerOrderStatus,
-} from '../../hooks/useDealerOrders';
-import type { DealerOrder } from '../../types/dealer';
+} from '../../../hooks/useDealerOrders';
+import type { DealerOrder } from '../../../types/dealer';
 
 /**
  * Available bulk operation types

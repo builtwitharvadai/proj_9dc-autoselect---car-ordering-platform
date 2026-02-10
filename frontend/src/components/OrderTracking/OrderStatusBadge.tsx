@@ -163,7 +163,7 @@ const SIZE_CONFIG = {
  * Displays order status with color-coded badge, icon, and accessible label.
  * Supports multiple sizes and optional click interaction.
  */
-export default function OrderStatusBadge({
+export function OrderStatusBadge({
   status,
   className = '',
   showIcon = true,

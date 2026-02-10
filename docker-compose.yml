@@ -3,8 +3,8 @@ version: '3.9'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     image: autoselect-backend:latest
     container_name: autoselect_backend
     restart: unless-stopped
@@ -31,8 +31,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     image: autoselect-frontend:latest
     container_name: autoselect_frontend
     restart: unless-stopped

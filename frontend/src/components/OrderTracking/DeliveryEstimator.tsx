@@ -119,7 +119,7 @@ function getProgressColor(progress: number): string {
  * DeliveryEstimator component displays estimated delivery date with dynamic updates
  * Shows progress percentage and factors affecting delivery time
  */
-export default function DeliveryEstimator({
+export function DeliveryEstimator({
   order,
   deliveryEstimate,
   timeline,

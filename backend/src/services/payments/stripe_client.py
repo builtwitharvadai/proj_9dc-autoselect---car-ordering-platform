@@ -12,7 +12,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 import stripe
-from stripe.error import (
+from stripe import (
     APIConnectionError,
     APIError,
     AuthenticationError,

@@ -18,7 +18,8 @@ from src.database.base import (
     create_table_args,
 )
 from src.database.models.user import User
-from src.database.models.vehicle import Vehicle, VehicleConfiguration
+from src.database.models.vehicle import Vehicle
+from src.database.models.vehicle_configuration import VehicleConfiguration
 from src.database.models.order import Order
 from src.database.models.inventory import InventoryItem
 

@@ -29,8 +29,7 @@ FROM python:3.11-slim AS backend-builder
 WORKDIR /app/backend
 
 # Install build dependencies
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
         g++ \
@@ -53,8 +52,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install runtime dependencies
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libpq5 \
         curl \

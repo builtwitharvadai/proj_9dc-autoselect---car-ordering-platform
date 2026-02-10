@@ -1,24 +1,4 @@
 # ============================================================================
-# Build Stage - Frontend
-# ============================================================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-
-# Copy frontend package files
-COPY frontend/package.json ./
-
-# Install dependencies (NEVER use npm ci - always use npm install)
-RUN npm install && \
-    npm cache clean --force
-
-# Copy frontend source
-COPY frontend/ ./
-
-# Build frontend
-RUN npm run build
-
-# ============================================================================
 # Build Stage - Backend
 # ============================================================================
 FROM python:3.11-slim AS backend-builder
@@ -34,7 +14,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements
-COPY backend/requirements.txt ./
+COPY requirements.txt ./
 
 # Install Python packages
 RUN pip install --user --no-cache-dir --no-warn-script-location \
@@ -58,17 +38,14 @@ RUN apt-get update && \
 # Create non-root user
 RUN groupadd -r appgroup && \
     useradd -r -g appgroup -u 1000 appuser && \
-    mkdir -p /app/backend /app/frontend/dist && \
+    mkdir -p /app/backend && \
     chown -R appuser:appgroup /app
 
 # Copy Python packages from builder
 COPY --from=backend-builder --chown=appuser:appgroup /root/.local /home/appuser/.local
 
 # Copy backend application
-COPY --chown=appuser:appgroup backend/ /app/backend/
-
-# Copy frontend build artifacts
-COPY --from=frontend-builder --chown=appuser:appgroup /app/frontend/dist /app/frontend/dist
+COPY --chown=appuser:appgroup . /app/backend/
 
 # Environment setup
 ENV PATH=/home/appuser/.local/bin:$PATH \

@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.5
-
 # ============================================================================
 # Build Stage - Frontend
 # ============================================================================
@@ -11,8 +9,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json ./
 
 # Install dependencies (NEVER use npm ci - always use npm install)
-RUN --mount=type=cache,target=/root/.npm \
-    npm install && \
+RUN npm install && \
     npm cache clean --force
 
 # Copy frontend source
@@ -40,8 +37,7 @@ RUN apt-get update && \
 COPY backend/requirements.txt ./
 
 # Install Python packages
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --user --no-cache-dir --no-warn-script-location \
+RUN pip install --user --no-cache-dir --no-warn-script-location \
     -r requirements.txt
 
 # ============================================================================
@@ -94,5 +90,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
 # Use tini for proper signal handling
 ENTRYPOINT ["tini", "--"]
 
-# Start command
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Start command - run migrations then start server
+CMD ["sh", "-c", "cd /app/backend && alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 4"]
